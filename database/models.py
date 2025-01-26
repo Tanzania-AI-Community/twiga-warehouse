@@ -286,4 +286,3 @@ class Chunk(SQLModel, table=True):
 
     """ RELATIONSHIPS """
     resource_: Optional["Resource"] = Relationship(back_populates="resource_chunks")
-    # section_: Optional["Section"] = Relationship(back_populates="section_chunks")
