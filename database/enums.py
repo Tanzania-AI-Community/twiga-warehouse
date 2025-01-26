@@ -38,25 +38,6 @@ class GradeLevel(str, Enum):
     AS1 = "as1"
     AS2 = "as2"
 
-    @property
-    def display_format(self) -> str:
-        """Returns a nicely formatted string for display"""
-        grade_display = {
-            "p1": "Standard 1",
-            "p2": "Standard 2",
-            "p3": "Standard 3",
-            "p4": "Standard 4",
-            "p5": "Standard 5",
-            "p6": "Standard 6",
-            "os1": "Form 1",
-            "os2": "Form 2",
-            "os3": "Form 3",
-            "os4": "Form 4",
-            "as1": "Form 5",
-            "as2": "Form 6",
-        }
-        return grade_display[self]
-
 
 class OnboardingState(str, Enum):
     NEW = "new"
@@ -74,12 +55,6 @@ class UserState(str, Enum):
 
 class SubjectName(str, Enum):
     GEOGRAPHY = "geography"
-
-    @property
-    def display_format(self) -> str:
-        emoji_map = {"geography": "🌎"}
-        emoji = emoji_map.get(self, "")
-        return f"{self.capitalize()} {emoji}"
 
 
 class ChunkType(str, Enum):
