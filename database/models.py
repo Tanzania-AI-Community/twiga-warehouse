@@ -68,11 +68,11 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: Optional[str] = Field(max_length=50)
     wa_id: str = Field(max_length=20, unique=True, index=True)
-    state: enums.UserState = Field(default=enums.UserState.new, max_length=50)
+    state: enums.UserState = Field(default=enums.UserState.NEW, max_length=50)
     onboarding_state: Optional[enums.OnboardingState] = Field(
-        default=enums.OnboardingState.new, max_length=50
+        default=enums.OnboardingState.NEW, max_length=50
     )
-    role: enums.Role = Field(default=enums.Role.teacher, max_length=20)
+    role: enums.Role = Field(default=enums.Role.TEACHER, max_length=20)
     class_info: Optional[Dict[str, List[str]]] = Field(default=None, sa_type=JSON)
     school_name: Optional[str] = Field(default=None, max_length=100)
     birthday: Optional[date] = Field(default=None, sa_type=Date)
@@ -157,7 +157,7 @@ class Class(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     subject_id: int = Field(foreign_key="subjects.id", index=True, ondelete="CASCADE")
     grade_level: enums.GradeLevel = Field(max_length=10, index=True)
-    status: enums.SubjectClassStatus = Field(default=enums.SubjectClassStatus.active)
+    status: enums.SubjectClassStatus = Field(default=enums.SubjectClassStatus.ACTIVE)
 
     """ RELATIONSHIPS """
     # A class may have entries in the teachers_classes table

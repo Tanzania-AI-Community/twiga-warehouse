@@ -7,7 +7,6 @@ import yaml
 # Import all your models
 import database.models as models
 from database.utils import get_database_url
-import database.enums as enums
 
 
 # Set up logging

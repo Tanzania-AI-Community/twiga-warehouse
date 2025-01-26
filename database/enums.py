@@ -2,41 +2,41 @@ from enum import Enum
 
 
 class SubjectClassStatus(str, Enum):
-    active = "active"
-    inactive = "inactive"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
 
 
 class ResourceType(str, Enum):
-    textbook = "textbook"
-    curriculum = "curriculum"
-    document = "document"
+    TEXTBOOK = "textbook"
+    CURRICULUM = "curriculum"
+    DOCUMENT = "document"
 
 
 class Role(str, Enum):
-    admin = "admin"
-    teacher = "teacher"
+    ADMIN = "admin"
+    TEACHER = "teacher"
 
 
 class MessageRole(str, Enum):
-    user = "user"
-    assistant = "assistant"
-    tool = "tool"
-    system = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
+    SYSTEM = "system"
 
 
 class GradeLevel(str, Enum):
-    p1 = "p1"
-    p2 = "p2"
-    p3 = "p3"
-    p4 = "p4"
-    p5 = "p5"
-    p6 = "p6"
-    os1 = "os1"
-    os2 = "os2"
-    os3 = "os3"
-    os4 = "os4"
-    as1 = "as1"
-    as2 = "as2"
+    P1 = "p1"
+    P2 = "p2"
+    P3 = "p3"
+    P4 = "p4"
+    P5 = "p5"
+    P6 = "p6"
+    OS1 = "os1"
+    OS2 = "os2"
+    OS3 = "os3"
+    OS4 = "os4"
+    AS1 = "as1"
+    AS2 = "as2"
 
     @property
     def display_format(self) -> str:
@@ -59,21 +59,21 @@ class GradeLevel(str, Enum):
 
 
 class OnboardingState(str, Enum):
-    new = "new"
-    personal_info_submitted = "personal_info_submitted"
-    completed = "completed"
+    NEW = "new"
+    PERSONAL_INFO_SUBMITTED = "personal_info_submitted"
+    COMPLETED = "completed"
 
 
 class UserState(str, Enum):
-    blocked = "blocked"
-    rate_limited = "rate_limited"
-    new = "new"
-    onboarding = "onboarding"
-    active = "active"
+    BLOCKED = "blocked"
+    RATE_LIMITED = "rate_limited"
+    NEW = "new"
+    ONBOARDING = "onboarding"
+    ACTIVE = "active"
 
 
 class SubjectName(str, Enum):
-    geography = "geography"
+    GEOGRAPHY = "geography"
 
     @property
     def display_format(self) -> str:
@@ -83,8 +83,8 @@ class SubjectName(str, Enum):
 
 
 class ChunkType(str, Enum):
-    text = "text"
-    exercise = "exercise"
-    image = "image"
-    table = "table"
-    other = "other"
+    TEXT = "text"
+    EXERCISE = "exercise"
+    IMAGE = "image"
+    TABLE = "table"
+    OTHER = "other"
