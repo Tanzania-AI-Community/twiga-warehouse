@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 import json
 from sqlmodel import select
 import logging
-from typing import List, Dict, Any
+from typing import Any
 import yaml
 
 # Import all your models
@@ -52,7 +52,7 @@ async def create_resource(file_path: str, resource_identifier: str):
 
 async def process_chunks(
     session: AsyncSession,
-    json_data: List[Dict[str, Any]],
+    json_data: list[dict[str, Any]],
     resource_id: int,
     batch_size: int = 30,
 ):
