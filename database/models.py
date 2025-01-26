@@ -212,8 +212,10 @@ class Resource(SQLModel, table=True):
     """ FIELDS """
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(max_length=100)
-    type: Optional[enums.ResourceType] = Field(max_length=30)
-    authors: Optional[list[str]] = Field(sa_column=Column(ARRAY(String(50))))
+    type: Optional[enums.ResourceType] = Field(max_length=30, default=None)
+    authors: Optional[list[str]] = Field(
+        default=None, sa_column=Column(ARRAY(String(50)))
+    )
     created_at: Optional[datetime] = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_type=DateTime(timezone=True),  # type: ignore

@@ -11,7 +11,6 @@ from scripts.new_resource import (
 )
 from scripts.new_class import create_class
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ def create_new_subject(
     subject_identifier: str = typer.Option(
         ..., help="Identifier for subject in YAML file"
     ),
-):
+) -> None:
     """Create a new subject from YAML data"""
     try:
         asyncio.run(create_subject(yaml_path, subject_identifier))
@@ -43,7 +42,7 @@ def create_new_class(
     subject_identifier: str = typer.Option(
         ..., help="The identifier for the subject in the YAML file"
     ),
-):
+) -> None:
     """Create a new class from YAML data"""
     try:
         asyncio.run(create_class(yaml_path, class_identifier, subject_identifier))
@@ -65,19 +64,15 @@ def create_new_resource(
     class_identifier: Optional[str] = typer.Option(
         None, help="Identifier for the class in YAML file"
     ),
-):
-    """Create a new resource and optionally add chunks and connect to class"""
+) -> None:
+    """Createdda new resource and optionally add chunks and connect to class"""
     try:
-        # Create the resource
         asyncio.run(create_resource(yaml_path, resource_identifier))
 
-        # If chunks path provided, create chunks
         if chunks_path:
             asyncio.run(create_chunks(yaml_path, resource_identifier, chunks_path))
 
-        # If class_id provided, connect resource to class
         if class_identifier:
-            # Get resource ID from yaml data
             asyncio.run(
                 connect_resource_to_class(
                     yaml_path, class_identifier, resource_identifier

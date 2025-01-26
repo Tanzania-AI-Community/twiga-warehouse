@@ -1,15 +1,12 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from pathlib import Path
 import logging
 from sqlmodel import select
 import yaml
 
-# Import all your models
 import database.models as models
 from database.utils import get_database_url
 
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -17,16 +14,13 @@ logger = logging.getLogger(__name__)
 async def create_class(file_path: str, class_identifier: str, subject_identifier: str):
     try:
         """Load sample data into the database."""
-        # Load sample data from YAML
         with open(file_path) as f:
             data = yaml.safe_load(f)
 
         engine = create_async_engine(get_database_url())
 
         async with AsyncSession(engine) as session:
-            # Get the subject data
             subject_data = data[subject_identifier]
-            # Check if subject exists
             stmt = select(models.Subject).where(
                 models.Subject.name == subject_data["name"]
             )
@@ -60,7 +54,7 @@ async def create_class(file_path: str, class_identifier: str, subject_identifier
                     f"No existing class found with name: {class_data['name']}, proceeding with creation."
                 )
 
-            # 2. Create the class
+            # Create the class
             class_obj = models.Class(
                 subject_id=subject.id,  # Use the actual subject ID
                 grade_level=class_data["grade_level"],

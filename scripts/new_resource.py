@@ -35,9 +35,7 @@ async def create_resource(file_path: str, resource_identifier: str):
                 )
                 return existing_resource
 
-            resource = models.Resource(
-                name=resource_data["name"],
-            )
+            resource = models.Resource(name=resource_data["name"])
             session.add(resource)
             await session.flush()
             logger.info(f"Created resource: {resource.name} (ID: {resource.id})")
