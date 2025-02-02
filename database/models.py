@@ -94,12 +94,12 @@ class Subject(SQLModel, table=True):
 
     """ RELATIONSHIPS """
     # A subject may have entries in the classes table
-    subject_classes: Optional[list["Class"]] = Relationship(
+    subject_classes: Optional[list["TIEClass"]] = Relationship(
         back_populates="subject_", cascade_delete=True
     )
 
 
-class Class(SQLModel, table=True):
+class TIEClass(SQLModel, table=True):
     __tablename__ = "classes"  # type: ignore
     __table_args__ = (
         UniqueConstraint("subject_id", "grade_level", name="unique_classes"),
@@ -137,7 +137,7 @@ class TeacherClass(SQLModel, table=True):
     class_id: int = Field(foreign_key="classes.id", index=True, ondelete="CASCADE")
 
     """ RELATIONSHIPS """
-    class_: Class = Relationship(back_populates="class_teachers")
+    class_: TIEClass = Relationship(back_populates="class_teachers")
     teacher_: User = Relationship(back_populates="taught_classes")
 
 
@@ -244,7 +244,7 @@ class ClassResource(SQLModel, table=True):
     resource_id: int = Field(foreign_key="resources.id", index=True, ondelete="CASCADE")
 
     """ RELATIONSHIPS """
-    class_: Class = Relationship(back_populates="class_resources")
+    class_: TIEClass = Relationship(back_populates="class_resources")
     resource_: Resource = Relationship(back_populates="resource_classes")
 
 
