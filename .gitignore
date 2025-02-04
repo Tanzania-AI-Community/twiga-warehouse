@@ -1,1 +1,4 @@
-
+data/
+.env
+*.pyc
+.DS_store
