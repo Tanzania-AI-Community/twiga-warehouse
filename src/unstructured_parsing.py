@@ -33,7 +33,7 @@ def create_documents():
     for doc in loader.lazy_load():
         docs.append(doc)
 
-    output_path = r"C:\Users\ADMIN\Desktop\KTHAIS\twiga-warehouse\data\geo_form2.md"
+    output_path = r"C:\Users\ADMIN\Desktop\KTHAIS\twiga-warehouse\data\parsed\geo_form2.json"
     with open(output_path, "w", encoding="utf-8") as f:
         docs_dict = [doc.model_dump() for doc in docs]
         json.dump(docs_dict, f, ensure_ascii=False, indent=2)
