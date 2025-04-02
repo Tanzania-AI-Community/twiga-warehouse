@@ -13,4 +13,7 @@ dependencies = [
     "sqlalchemy>=2.0.37",
     "sqlmodel>=0.0.22",
     "typer>=0.15.1",
+    "together>=1.5.4",
+    "langchain-core>=0.3.49",
+    "langchain-unstructured>=0.1.6",
 ]
