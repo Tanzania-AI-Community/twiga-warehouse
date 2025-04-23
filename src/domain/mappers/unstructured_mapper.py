@@ -9,5 +9,4 @@ class UnstructuredMapper:
             content=document.page_content,
             embedding=content_embedding,
             page_number=document.metadata["page_number"],
-            resource_id=3,
         )
