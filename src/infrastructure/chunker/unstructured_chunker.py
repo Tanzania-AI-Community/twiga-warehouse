@@ -9,6 +9,7 @@ from together import Together
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
 from src.domain.mappers.unstructured_mapper import UnstructuredMapper
+from src.domain.entities.toc import TableOfContents
 
 
 class UnstructuredChunker(Chunker):
@@ -43,6 +44,62 @@ class UnstructuredChunker(Chunker):
         
         if not chunks:
             raise EmptyChunkerResponse(book_path)
+
+        return chunks
+
+
+    def _load_pages(self, book_path: str, start_page: int, end_page: int) -> UnstructuredLoader:
+
+        api_key, api_url = self._get_keys()
+
+        loader = UnstructuredLoader(
+            file_path=book_path,
+            strategy="hi_res",
+            unique_element_ids=True,
+            partition_via_api=True,
+            coordinates=True,
+            api_key=api_key,
+            url=api_url,
+            split_pdf_page=True,
+            split_pdf_page_range=[start_page, end_page]
+        )
+
+        return loader
+
+
+    def _get_page_count(pdf_path):
+        with open(pdf_path, 'rb') as file:
+            reader = PdfReader(file)
+            return len(reader.pages)
+        
+
+    def chunk(self, book_path: str, toc: TableOfContents) -> list[Chunk]:
+
+        documents: list[Document] = []
+        parsed_text: list[str] = []
+        chunks: list[Chunk] = []  
+
+        page_count = self._get_page_count(book_path)
+        
+        for i, chapter in enumerate(toc.chapters):
+
+            last_page = (toc.chapters[i+1].start_page - 1) if i+1 < len(toc.chapters) else page_count
+            loader = self._load_pages(book_path, chapter.start_page, last_page)
+
+            for doc in loader.lazy_load():
+                if len(doc.page_content) == 0 or doc.metadata["category"] != "NarrativeText":  # TODO: recheck this again
+                    continue
+
+                documents.append(doc)
+                parsed_text.append(doc.page_content)
+  
+            embeddings = self.get_embeddings(parsed_text)
+            for doc, embedding in zip(documents, embeddings):
+                chunk = UnstructuredMapper.map(document=doc, content_embedding=embedding, chapter_number=chapter.number)
+                chunks.append(chunk)
+            
+            if not chunks:
+                raise EmptyChunkerResponse(book_path)
 
         return chunks
 
