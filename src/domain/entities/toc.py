@@ -1,8 +1,12 @@
 from pydantic import BaseModel, Field
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 from together import Together
+import os
 
-together = Together()
+from dotenv import load_dotenv
+load_dotenv()
+
+together = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 
 class Chapter(BaseModel):
     name: str = Field(description="Chapter name")
@@ -31,7 +35,7 @@ def get_raw_page_text(pdf_path: str, toc_page_number: int | list[int]):
     
     text = ""
     for page_num in toc_page_number:
-        text += reader.pages[page_num].extract_text()
+        text += reader.pages[page_num-1].extract_text()
         
     return text
 

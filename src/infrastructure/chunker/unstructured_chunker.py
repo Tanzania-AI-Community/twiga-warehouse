@@ -11,6 +11,12 @@ from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
 from src.domain.mappers.unstructured_mapper import UnstructuredMapper
 from src.domain.entities.toc import TableOfContents
 
+from pypdf import PdfReader
+import logging
+from tqdm import tqdm
+
+logging.basicConfig(level=logging.INFO)
+
 
 class UnstructuredChunker(Chunker):
     def chunk(self, book_path: str) -> list[Chunk]:
@@ -67,7 +73,7 @@ class UnstructuredChunker(Chunker):
         return loader
 
 
-    def _get_page_count(pdf_path):
+    def _get_page_count(self, pdf_path):
         with open(pdf_path, 'rb') as file:
             reader = PdfReader(file)
             return len(reader.pages)
@@ -80,11 +86,17 @@ class UnstructuredChunker(Chunker):
         chunks: list[Chunk] = []  
 
         page_count = self._get_page_count(book_path)
+
+        logging.info
+
+        logging.info(f"Page count: {page_count}. Begin chunking by chapter...")
         
-        for i, chapter in enumerate(toc.chapters):
+        for i, chapter in enumerate(tqdm(toc.chapters)):
 
             last_page = (toc.chapters[i+1].start_page - 1) if i+1 < len(toc.chapters) else page_count
             loader = self._load_pages(book_path, chapter.start_page, last_page)
+
+            logging.info(f"Chunking chapter {chapter.number}...")
 
             for doc in loader.lazy_load():
                 if len(doc.page_content) == 0 or doc.metadata["category"] != "NarrativeText":  # TODO: recheck this again

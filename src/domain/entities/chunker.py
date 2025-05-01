@@ -31,3 +31,4 @@ class EmptyChunkerResponse(Exception):
 
         msg = f"Chunker ({chunker_config.chunker_type}) produced empty chunk list for book: {book_path}."
         super().__init__(msg)
+        

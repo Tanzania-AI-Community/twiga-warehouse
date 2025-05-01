@@ -1,0 +1,4 @@
+python-dotenv
+unstructured_client
+langchain-unstructured
+pypdf

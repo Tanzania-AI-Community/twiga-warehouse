@@ -5,15 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "asyncpg>=0.30.0",
-    "greenlet>=3.1.1",
-    "pgvector>=0.3.6",
-    "python-dotenv>=1.0.1",
-    "pyyaml>=6.0.2",
-    "sqlalchemy>=2.0.37",
-    "sqlmodel>=0.0.22",
-    "typer>=0.15.1",
-    "together>=1.5.4",
-    "langchain-core>=0.3.49",
     "langchain-unstructured>=0.1.6",
+    "pdfreader>=0.1.15",
+    "pypdf>=5.4.0",
+    "python-dotenv>=1.1.0",
+    "together>=1.5.5",
+    "tqdm>=4.67.1",
+    "unstructured-client>=0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
 ]
