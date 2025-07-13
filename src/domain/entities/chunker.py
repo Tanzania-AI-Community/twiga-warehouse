@@ -4,15 +4,7 @@ from enum import Enum
 from pydantic import BaseModel
 
 from src.domain.entities.chunk import Chunk
-
-
-class Chunker:
-    def __init__(self, config):
-        self.config = config
-
-    @abstractmethod
-    def chunk(book_path: str) -> list[Chunk]:
-        pass
+from src.domain.entities.table_of_contents import TableOfContents
 
 
 class ChunkerType(str, Enum):
@@ -22,6 +14,15 @@ class ChunkerType(str, Enum):
 
 class ChunkerConfig(BaseModel):
     chunker_type: ChunkerType
+
+
+class Chunker:
+    def __init__(self, config: ChunkerConfig):
+        self.config = config
+
+    @abstractmethod
+    def chunk(book_path: str, table_of_contents: TableOfContents = None, text_initial_page: int = None) -> list[Chunk]:
+        pass
 
 
 class EmptyChunkerResponse(Exception):

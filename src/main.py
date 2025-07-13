@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from src.application.factories.chunker_factory import ChunkerFactory
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType
-from src.domain.entities.toc import get_toc
+from src.domain.entities.table_of_contents import get_table_of_contents, TableOfContents
 
 import logging
 
@@ -72,8 +72,12 @@ def main() -> None:
         help="Specify which chunker to use (langchain or unstructured).",
     )
     parser.add_argument("--title", type=str, required=True, help="Path to the input book to be chunked.")
-    parser.add_argument("--table_of_contents_page_number", type=int, required=True, 
-                        help="Page number of the table of contents. Can be a single number or a comma-separated list (e.g., 5 or [4,5,6])")
+    parser.add_argument(
+        "--table_of_contents_page_number",
+        type=int,
+        required=True, 
+        help="Page number of the table of contents. Can be a single number or a comma-separated list (e.g., 5 or [4,5,6])",
+    )
     parser.add_argument("--first_page_number", type=int, required=True, help="Page number of the first page.")
     parser.add_argument("--author", type=str, required=True, help="Path to the input book to be chunked.")
     parser.add_argument("--input_path", type=str, required=True, help="Path to the input book to be chunked.")
@@ -86,11 +90,13 @@ def main() -> None:
 
     chunker: Chunker = chunker_factory.get_chunker()
 
-    toc: TableOfContents = get_toc(config.input_path, config.table_of_contents_page_number)
+    toc: TableOfContents = get_table_of_contents(
+        pdf_path=config.input_path, toc_page_number=config.table_of_contents_page_number
+    )
 
     logging.info(f"Table of contents:\n{toc}")
 
-    chunks: list[Chunk] = chunker.chunk(book_path=config.input_path, toc=toc)
+    chunks: list[Chunk] = chunker.chunk(book_path=config.input_path, table_of_contents=toc, text_initial_page=config.first_page_number)
 
     output_file = create_output_file(config=config, chunks=chunks)
 

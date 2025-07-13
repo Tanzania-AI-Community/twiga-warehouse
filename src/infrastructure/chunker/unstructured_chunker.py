@@ -9,7 +9,7 @@ from together import Together
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
 from src.domain.mappers.unstructured_mapper import UnstructuredMapper
-from src.domain.entities.toc import TableOfContents
+from src.domain.entities.table_of_contents import TableOfContents
 
 from pypdf import PdfReader
 import logging
@@ -79,8 +79,7 @@ class UnstructuredChunker(Chunker):
             return len(reader.pages)
         
 
-    def chunk(self, book_path: str, toc: TableOfContents) -> list[Chunk]:
-
+    def chunk(self, book_path: str, toc: TableOfContents, text_initial_page: int = None) -> list[Chunk]:
         documents: list[Document] = []
         parsed_text: list[str] = []
         chunks: list[Chunk] = []  
