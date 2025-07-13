@@ -12,6 +12,7 @@ dependencies = [
     "together>=1.5.5",
     "tqdm>=4.67.1",
     "unstructured-client>=0.34.0",
+    "pydantic-settings>=2.10.1",
 ]
 
 [dependency-groups]
