@@ -1,18 +1,19 @@
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 from together import Together
-import os
 
-from dotenv import load_dotenv
-load_dotenv()
+from src.config.settings import settings
 
-together = Together(api_key=os.getenv("TOGETHER_API_KEY"))
+
+together = Together(api_key=settings.TOGETHER_AI_API_KEY)
+
 
 class Chapter(BaseModel):
     name: str = Field(description="Chapter name")
     number: int = Field(description="Chapter number")
     start_page: int = Field(description="Chapter start page number")
-    
+
+
 class TableOfContents(BaseModel):
     chapters: list[Chapter] = Field(description="List of chapters in the table of contents")
 
@@ -40,7 +41,7 @@ def get_raw_page_text(pdf_path: str, toc_page_number: int | list[int]):
     return text
 
 
-def get_toc(pdf_path: str, toc_page_number: int | list[int]):
+def get_table_of_contents(pdf_path: str, toc_page_number: int | list[int]):
     """ Extracts chapter information from table of contents
 
     Args:
@@ -71,5 +72,6 @@ def get_toc(pdf_path: str, toc_page_number: int | list[int]):
         },
     )
 
+    # print(extract)
     toc_data = TableOfContents.model_validate_json(extract.choices[0].message.content)
     return toc_data
