@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     TOGETHER_AI_API_KEY: str
     UNSTRUCTURED_API_KEY: str
     UNSTRUCTURED_API_URL: str
+    INPUT_BOOKS_PATH: str
+    OUTPUT_BOOKS_PATH: str
 
     class Config:
         env_file = os.path.join(os.path.dirname(__file__), "../..", ".env")
