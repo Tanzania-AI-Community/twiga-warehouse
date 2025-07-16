@@ -59,8 +59,8 @@ class LangchainChunker(Chunker):
         text_splitter = RecursiveCharacterTextSplitter(
             separators=separators + default_separators,
             keep_separator=False,
-            chunk_size=1000,
-            chunk_overlap=50,
+            chunk_size=250,
+            chunk_overlap=30,
         )
 
         initial_documents: list[Document] = text_splitter.split_documents(docs)
@@ -124,8 +124,7 @@ class LangchainChunker(Chunker):
         return doc_chapter
 
 
-    @staticmethod
-    def get_embeddings(texts: list[str], batch_size: int = 16) -> list[list[float]]:
+    def get_embeddings(self, texts: list[str], batch_size: int = 16) -> list[list[float]]:
         client = Together(api_key=settings.TOGETHER_AI_API_KEY)
 
         embeddings = []
@@ -135,7 +134,7 @@ class LangchainChunker(Chunker):
             batch = texts[i * batch_size : (i + 1) * batch_size]
 
             response = client.embeddings.create(
-                model="BAAI/bge-large-en-v1.5",
+                model=self.config.embedding_model_name,
                 input=batch,
             )
 
