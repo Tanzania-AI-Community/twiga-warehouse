@@ -1,5 +1,6 @@
 from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType
 from src.infrastructure.chunker.langchain_chunker import LangchainChunker
+from src.infrastructure.chunker.llm_chunker import LLMChunker
 from src.infrastructure.chunker.unstructured_chunker import UnstructuredChunker
 
 
@@ -13,6 +14,9 @@ class ChunkerFactory:
         
         if self.config.chunker_type == ChunkerType.LANGCHAIN:
             return LangchainChunker(config=self.config)
+
+        if self.config.chunker_type == ChunkerType.LLM:
+            return LLMChunker(config=self.config)
 
         else:
             raise ChunkerNotImplementedError(self.config.chunker_type)
