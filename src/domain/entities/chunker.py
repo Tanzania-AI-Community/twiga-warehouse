@@ -10,10 +10,15 @@ from src.domain.entities.table_of_contents import TableOfContents
 class ChunkerType(str, Enum):
     UNSTRUCTURED = "unstructured"
     LANGCHAIN = "langchain"
+    LLM = "llm"
 
 
 class ChunkerConfig(BaseModel):
     chunker_type: ChunkerType
+    last_page_number: int | None = None
+    llm_model_name: str | None = None
+    embedding_model_name: str | None = None
+    page_batch_size: int | None = None
 
 
 class Chunker:
