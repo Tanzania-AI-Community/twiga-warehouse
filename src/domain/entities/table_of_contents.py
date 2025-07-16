@@ -58,20 +58,19 @@ def get_table_of_contents(pdf_path: str, toc_page_number: int | list[int]):
         messages=[
             {
                 "role": "system",
-                        "content": "Extract the chapter names, chapter numbers and chapter page number from this table of contents. Note: ONLY extract the CHAPTERS! DO NOT extract the glossary, appendix, references, etc. ",
+                "content": "Extract the chapter names, chapter numbers and chapter page number from this table of contents. Note: ONLY extract the CHAPTERS! DO NOT extract the glossary, appendix, references, etc. Also, the chapter page number must be the one where the title is located! Obviously, the first chapter will always have 1 as the start page",
             },
             {
                 "role": "user",
                 "content": toc,
             },
         ],
-        model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
         response_format={
             "type": "json_object",
             "schema": TableOfContents.model_json_schema(),
         },
     )
 
-    # print(extract)
     toc_data = TableOfContents.model_validate_json(extract.choices[0].message.content)
     return toc_data
