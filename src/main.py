@@ -2,14 +2,21 @@ import argparse
 import json
 from typing import Any, Union
 
+import logging
 from pydantic import BaseModel
 
 from src.application.factories.chunker_factory import ChunkerFactory
+from src.config.settings import settings
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType
 from src.domain.entities.table_of_contents import get_table_of_contents, TableOfContents
 
-import logging
+
+def comma_separated_ints(s: str) -> list[int]:
+    try:
+        return [int(item) for item in s.split(',')]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{s}' is not a comma-separated list of integers")
 
 
 def parse_toc_pages(value: str) -> Union[int, list[int]]:
@@ -34,17 +41,22 @@ class BookConfig(BaseModel):
     title: str
     author: str
     chunker_config: ChunkerConfig
-    table_of_contents_page_number: int
+    table_of_contents_page_number: Union[int|list[int]]
     first_page_number: int
 
 
 def create_config(args) -> BookConfig:
     chunker_config = ChunkerConfig(
         chunker_type=args.chunker_type,
+        last_page_number=args.last_page_number,
+        page_batch_size=args.page_batch_size,
+        llm_model_name=args.llm_model,
+        embedding_model_name=args.embedding_model,
     )
+
     return BookConfig(
-        input_path=args.input_path,
-        output_path=args.output_path,
+        input_path=settings.INPUT_BOOKS_PATH + args.input_file_name,
+        output_path=settings.OUTPUT_BOOKS_PATH + args.output_file_name,
         title=args.title,
         author=args.author,
         chunker_config=chunker_config,
@@ -68,24 +80,48 @@ def main() -> None:
         "--chunker_type",
         type=ChunkerType,
         required=True,
-        choices=[ChunkerType.LANGCHAIN, ChunkerType.UNSTRUCTURED],
+        choices=[
+            ChunkerType.LANGCHAIN, ChunkerType.UNSTRUCTURED, ChunkerType.LLM
+        ],
         help="Specify which chunker to use (langchain or unstructured).",
     )
     parser.add_argument("--title", type=str, required=True, help="Path to the input book to be chunked.")
     parser.add_argument(
         "--table_of_contents_page_number",
-        type=int,
+        type=comma_separated_ints,
+        default=[],
         required=True, 
         help="Page number of the table of contents. Can be a single number or a comma-separated list (e.g., 5 or [4,5,6])",
     )
     parser.add_argument("--first_page_number", type=int, required=True, help="Page number of the first page.")
+    parser.add_argument("--last_page_number", type=int, required=False, help="Page number of the last page.")
     parser.add_argument("--author", type=str, required=True, help="Path to the input book to be chunked.")
-    parser.add_argument("--input_path", type=str, required=True, help="Path to the input book to be chunked.")
-    parser.add_argument("--output_path", type=str, required=False, help="Path to save the chunked output.")
+    parser.add_argument("--input_file_name", type=str, required=True, help="Path to the input book to be chunked.")
+    parser.add_argument("--output_file_name", type=str, required=True, help="Path to save the chunked output.")
+    parser.add_argument(
+        "--llm_model",
+        type=str,
+        required=False,
+        default="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+        help="Model to use if using LLMChunker.",
+    )
+    parser.add_argument(
+        "--embedding_model",
+        type=str,
+        required=False,
+        default="BAAI/bge-large-en-v1.5",
+        help="Model to calculate the embedding of the text",
+    )
+    parser.add_argument(
+        "--page_batch_size",
+        type=int,
+        required=False,
+        help="Batch size of chunked pages when using LLMChunker.",
+    )
 
     args = parser.parse_args()
-    
     config = create_config(args)
+
     chunker_factory = ChunkerFactory(config.chunker_config)
 
     chunker: Chunker = chunker_factory.get_chunker()
@@ -100,9 +136,8 @@ def main() -> None:
 
     output_file = create_output_file(config=config, chunks=chunks)
 
-    output_path = f"./{config.output_path}"
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(output_file, f, ensure_ascii=False, indent=2)
+    with open(config.output_path, "w", encoding="utf-8") as f:
+        json.dump(output_file, f, ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":
