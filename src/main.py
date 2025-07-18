@@ -1,12 +1,13 @@
 import argparse
 import json
 from typing import Any, Union
+import yaml
 
 import logging
-from pydantic import BaseModel
 
 from src.application.factories.chunker_factory import ChunkerFactory
 from src.config.settings import settings
+from src.domain.entities.book import BookConfig, ClassConfig, ChunkerConfig, SubjectConfig, ResourceConfig
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType
 from src.domain.entities.table_of_contents import get_table_of_contents, TableOfContents
@@ -19,56 +20,60 @@ def comma_separated_ints(s: str) -> list[int]:
         raise argparse.ArgumentTypeError(f"'{s}' is not a comma-separated list of integers")
 
 
-def parse_toc_pages(value: str) -> Union[int, list[int]]:
-    try:
-        # Try parsing as a single integer first
-        return int(value)
-    except ValueError:
-        # If not a single integer, try parsing as a list of integers
-        try:
-            # Remove brackets and split by commas
-            values = value.strip('[]').split(',')
-            return [int(v.strip()) for v in values]
-        except ValueError:
-            raise argparse.ArgumentTypeError(
-                f"'{value}' must be either an integer or a comma-separated list of integers"
-            )
+def get_resource_class_and_subject_config(yaml_data: dict[str, Any]) -> tuple[ResourceConfig, ClassConfig, SubjectConfig]:
+    resource_config = ResourceConfig(
+        name=yaml_data["resource"].get("name", ""),
+        type=yaml_data["resource"].get("type", "textbook"),
+        authors=yaml_data["resource"].get("authors", list()),
+    )
 
+    class_config = ClassConfig(
+        name=yaml_data["class"].get("name", ""),
+        grade_level=yaml_data["class"].get("grade_level", ""),
+        status=yaml_data["class"].get("status", ""),
+    )
 
-class BookConfig(BaseModel):
-    input_path: str
-    output_path: str
-    title: str
-    author: str
-    chunker_config: ChunkerConfig
-    table_of_contents_page_number: Union[int|list[int]]
-    first_page_number: int
+    subject_config = SubjectConfig(name=yaml_data["subject"].get("name", ""))
+
+    return resource_config, class_config, subject_config
 
 
 def create_config(args) -> BookConfig:
+    yaml_file_path = settings.INPUT_BOOKS_PATH + args.input_dir + "info.yaml"
+    with open(yaml_file_path) as f:
+        yaml_data = yaml.safe_load(f)
+
     chunker_config = ChunkerConfig(
         chunker_type=args.chunker_type,
-        last_page_number=args.last_page_number,
+        last_page_number=yaml_data["book_config"].get("last_page_number"),
         page_batch_size=args.page_batch_size,
         llm_model_name=args.llm_model,
         embedding_model_name=args.embedding_model,
     )
 
+    resource_config, class_config, subject_config = get_resource_class_and_subject_config(yaml_data)
+
     return BookConfig(
-        input_path=settings.INPUT_BOOKS_PATH + args.input_file_name,
+        input_path=settings.INPUT_BOOKS_PATH + args.input_dir + args.input_file_name,
         output_path=settings.OUTPUT_BOOKS_PATH + args.output_file_name,
-        title=args.title,
-        author=args.author,
+        resource=resource_config,
+        class_=class_config,
+        subject=subject_config,
         chunker_config=chunker_config,
-        table_of_contents_page_number=args.table_of_contents_page_number,
-        first_page_number=args.first_page_number,
+        table_of_contents_page_number=comma_separated_ints(yaml_data["book_config"]["table_of_contents_page_number"]),
+        first_page_number=yaml_data["book_config"]["first_page_number"],
     )
 
 
-def create_output_file(config: BookConfig, chunks: list[Chunk]) -> dict[str, Any]:
+def create_output_file(
+    config: BookConfig, chunks: list[Chunk], table_of_contents: TableOfContents
+) -> dict[str, Any]:
     return {
-        "title": config.title,
-        "author": config.author,
+        "resource": config.resource.model_dump(),
+        "class": config.class_.model_dump(),
+        "subject": config.subject.model_dump(),
+        "table_of_contents": table_of_contents.model_dump(),
+        "chunker_config": config.chunker_config.model_dump(),
         "chunks": [chunk.model_dump() for chunk in chunks],
     }
 
@@ -85,18 +90,8 @@ def main() -> None:
         ],
         help="Specify which chunker to use (langchain or unstructured).",
     )
-    parser.add_argument("--title", type=str, required=True, help="Path to the input book to be chunked.")
-    parser.add_argument(
-        "--table_of_contents_page_number",
-        type=comma_separated_ints,
-        default=[],
-        required=True, 
-        help="Page number of the table of contents. Can be a single number or a comma-separated list (e.g., 5 or [4,5,6])",
-    )
-    parser.add_argument("--first_page_number", type=int, required=True, help="Page number of the first page.")
-    parser.add_argument("--last_page_number", type=int, required=False, help="Page number of the last page.")
-    parser.add_argument("--author", type=str, required=True, help="Path to the input book to be chunked.")
-    parser.add_argument("--input_file_name", type=str, required=True, help="Path to the input book to be chunked.")
+    parser.add_argument("--input_dir", type=str, required=True, help="Path to the input book and general info to be chunked.")
+    parser.add_argument("--input_file_name", type=str, required=True, help="Filename of the PDF to be chunked.")
     parser.add_argument("--output_file_name", type=str, required=True, help="Path to save the chunked output.")
     parser.add_argument(
         "--llm_model",
@@ -115,6 +110,7 @@ def main() -> None:
     parser.add_argument(
         "--page_batch_size",
         type=int,
+        default=None,
         required=False,
         help="Batch size of chunked pages when using LLMChunker.",
     )
@@ -134,7 +130,7 @@ def main() -> None:
 
     chunks: list[Chunk] = chunker.chunk(book_path=config.input_path, table_of_contents=toc, text_initial_page=config.first_page_number)
 
-    output_file = create_output_file(config=config, chunks=chunks)
+    output_file = create_output_file(config=config, chunks=chunks, table_of_contents=toc)
 
     with open(config.output_path, "w", encoding="utf-8") as f:
         json.dump(output_file, f, ensure_ascii=False, indent=4)
