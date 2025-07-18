@@ -1,12 +1,13 @@
 import os
+from typing import Optional
 
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     TOGETHER_AI_API_KEY: str
-    UNSTRUCTURED_API_KEY: str
-    UNSTRUCTURED_API_URL: str
+    UNSTRUCTURED_API_KEY: Optional[str]
+    UNSTRUCTURED_API_URL: Optional[str]
     INPUT_BOOKS_PATH: str
     OUTPUT_BOOKS_PATH: str
 
