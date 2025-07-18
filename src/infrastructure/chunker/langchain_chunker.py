@@ -9,11 +9,11 @@ from together import Together
 import logging
 from tqdm import tqdm
 
+from src.application.mappers.langchain_mapper import LangchainMapper
+from src.config.settings import settings
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
-from src.domain.mappers.langchain_mapper import LangchainMapper
 from src.domain.entities.table_of_contents import TableOfContents
-from src.config.settings import settings
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker
 from src.domain.entities.table_of_contents import TableOfContents

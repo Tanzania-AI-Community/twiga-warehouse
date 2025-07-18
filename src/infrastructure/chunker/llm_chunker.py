@@ -8,11 +8,11 @@ from together import Together
 from together.types import ChatCompletionResponse
 from tqdm import tqdm
 
+from src.application.mappers.llm_mapper import LLMMapper
+from src.config.settings import settings
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
-from src.domain.mappers.llm_mapper import LLMMapper
 from src.domain.entities.table_of_contents import TableOfContents
-from src.config.settings import settings
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker
 from src.domain.entities.table_of_contents import TableOfContents
@@ -74,16 +74,17 @@ class LLMChunker(Chunker):
                     chapter_data = LLMChapterBook.model_validate_json(llm_response.choices[0].message.content)
                 
                 except ValidationError:
-                    logging.error("LLM did not produce the expected JSON format.")
+                    logging.error(f"LLM did not produce the expected JSON format in batch: {current_batch}.")
 
-                    should_break_parsing = True
-                    break
+                    # should_break_parsing = True
+                    # break
+                    continue
 
                 for llm_chunk in chapter_data.chunks:
                     chunk_parsed_texts.append(llm_chunk.content)
                     chunk_chapter_numbers.append(chapter.number)
                     chunk_page_numbers.append(batch_initial_page)
-                
+
                 current_batch += 1
  
         logging.info(f"Getting embeddings from {len(chunk_parsed_texts)} documents...\n")

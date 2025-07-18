@@ -6,9 +6,9 @@ from langchain_unstructured import UnstructuredLoader
 from langchain_core.documents import Document
 from together import Together
 
+from src.application.mappers.unstructured_mapper import UnstructuredMapper
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
-from src.domain.mappers.unstructured_mapper import UnstructuredMapper
 from src.domain.entities.table_of_contents import TableOfContents
 
 from pypdf import PdfReader
