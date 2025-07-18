@@ -1,6 +1,6 @@
 import argparse
 import json
-from typing import Any, Union
+from typing import Any
 import yaml
 
 import logging
@@ -10,7 +10,8 @@ from src.config.settings import settings
 from src.domain.entities.book import BookConfig, ClassConfig, ChunkerConfig, SubjectConfig, ResourceConfig
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType
-from src.domain.entities.table_of_contents import get_table_of_contents, TableOfContents
+from src.domain.entities.table_of_contents import TableOfContents
+from src.infrastructure.table_of_contents.table_of_contents import get_table_of_contents
 
 
 def comma_separated_ints(s: str) -> list[int]:
@@ -119,7 +120,6 @@ def main() -> None:
     config = create_config(args)
 
     chunker_factory = ChunkerFactory(config.chunker_config)
-
     chunker: Chunker = chunker_factory.get_chunker()
 
     toc: TableOfContents = get_table_of_contents(
