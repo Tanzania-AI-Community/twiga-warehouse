@@ -87,7 +87,7 @@ def main() -> None:
         type=ChunkerType,
         required=True,
         choices=[
-            ChunkerType.LANGCHAIN, ChunkerType.UNSTRUCTURED, ChunkerType.LLM
+            ChunkerType.LANGCHAIN, ChunkerType.LLM
         ],
         help="Specify which chunker to use (langchain or unstructured).",
     )
