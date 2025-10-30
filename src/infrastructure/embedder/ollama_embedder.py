@@ -6,7 +6,6 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_together.embeddings import TogetherEmbeddings
 from pydantic import SecretStr
 
-from app.config import llm_settings
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,7 @@ class OllamaEmbeddingClient:
             response = requests.post(
                 self._endpoint(),
                 json=payload,
-                timeout=llm_settings.ollama_request_timeout,
+                timeout=60,
             )
             response.raise_for_status()
         except Exception as exc:
@@ -51,7 +50,7 @@ class OllamaEmbeddingClient:
 
 def get_embedding_client():
     model_name = "mxbai-embed-large"
-    base_url = "https://localhost:12345"
+    base_url = "https://b6574b1e8fb6.ngrok-free.app/"
 
     return OllamaEmbeddingClient(base_url=base_url, model=model_name)
 
