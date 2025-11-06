@@ -16,6 +16,7 @@ dependencies = [
     "langchain>=0.3.27",
     "langchain-community>=0.3.31",
     "langchain-openai>=0.3.35",
+    "mistralai==1.9.11",
 ]
 
 [dependency-groups]

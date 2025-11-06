@@ -6,3 +6,4 @@ __pycache__
 .venv/
 .ipynb_checkpoints/
 notebooks/
+.venv_310
