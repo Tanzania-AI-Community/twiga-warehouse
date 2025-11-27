@@ -33,7 +33,7 @@ class LangchainChunker(Chunker):
         
         page_of_initial_chapter = (
             table_of_contents.chapters[0].start_page + text_initial_page
-            if table_of_contents and text_initial_page
+            if table_of_contents.chapters and text_initial_page
             else 0
         )
 
