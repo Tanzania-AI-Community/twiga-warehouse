@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     TOGETHER_AI_API_KEY: Optional[str]
+    GOOGLE_AI_API_KEY: Optional[str]
     MISTRAL_API_KEY: Optional[str]
     UNSTRUCTURED_API_KEY: Optional[str]
     UNSTRUCTURED_API_URL: Optional[str]
