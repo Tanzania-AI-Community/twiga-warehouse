@@ -11,6 +11,7 @@ class ChunkerType(str, Enum):
     UNSTRUCTURED = "unstructured"
     LANGCHAIN = "langchain"
     LLM = "llm"
+    MATHEMATICAL = "mathematical"
 
 
 class ChunkerConfig(BaseModel):

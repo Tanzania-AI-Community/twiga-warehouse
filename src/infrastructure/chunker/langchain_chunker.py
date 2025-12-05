@@ -3,7 +3,6 @@ import math
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from together import Together
 import logging
 from tqdm import tqdm
 
@@ -15,6 +14,7 @@ from src.domain.entities.table_of_contents import TableOfContents
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker
 from src.domain.entities.table_of_contents import TableOfContents
+from src.infrastructure.embedder.ollama_embedder import get_embeddings
 
 
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +33,7 @@ class LangchainChunker(Chunker):
         
         page_of_initial_chapter = (
             table_of_contents.chapters[0].start_page + text_initial_page
-            if table_of_contents and text_initial_page
+            if table_of_contents.chapters and text_initial_page
             else 0
         )
 
@@ -95,7 +95,7 @@ class LangchainChunker(Chunker):
 
         print(f"Getting embeddings from {len(documents)} documents...\n")
 
-        embeddings = self.get_embeddings(parsed_text)
+        embeddings = get_embeddings(parsed_text)
         for doc, chapter_number, embedding in zip(documents, document_chapters, embeddings):
             chunk = LangchainMapper.map(
                 document=doc,
@@ -120,28 +120,3 @@ class LangchainChunker(Chunker):
             doc_chapter = chapter.number
         
         return doc_chapter
-
-
-    def get_embeddings(self, texts: list[str], batch_size: int = 16) -> list[list[float]]:
-        client = Together(api_key=settings.TOGETHER_AI_API_KEY)
-
-        embeddings = []
-        num_batches = math.ceil(len(texts) / batch_size)
-
-        for i in tqdm(range(num_batches)):
-            batch = texts[i * batch_size : (i + 1) * batch_size]
-
-            response = client.embeddings.create(
-                model=self.config.embedding_model_name,
-                input=batch,
-            )
-
-            if not response.data:
-                raise ValueError(f"Failed to generate embeddings for batch {i}")
-
-            for j, embedding_data in enumerate(response.data):
-                if embedding_data.embedding is None:
-                    raise ValueError(f"Failed to generate embedding for text at index {i * batch_size + j}")
-                embeddings.append(embedding_data.embedding)
-
-        return embeddings

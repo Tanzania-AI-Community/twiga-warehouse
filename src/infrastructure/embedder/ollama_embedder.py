@@ -1,12 +1,6 @@
 import logging
-from typing import List
 
 import requests
-from langchain_openai import OpenAIEmbeddings
-from langchain_together.embeddings import TogetherEmbeddings
-from pydantic import SecretStr
-
-from app.config import llm_settings
 
 
 logger = logging.getLogger(__name__)
@@ -22,14 +16,14 @@ class OllamaEmbeddingClient:
     def _endpoint(self) -> str:
         return f"{self.base_url}/api/embed"
 
-    def _request_embedding(self, prompt: str) -> List[float]:
+    def _request_embedding(self, prompt: str) -> list[float]:
         payload = {"model": self.model, "input": prompt}
 
         try:
             response = requests.post(
                 self._endpoint(),
                 json=payload,
-                timeout=llm_settings.ollama_request_timeout,
+                timeout=60,
             )
             response.raise_for_status()
         except Exception as exc:
@@ -42,21 +36,30 @@ class OllamaEmbeddingClient:
             raise ValueError("Ollama response did not include an 'embedding' field")
         return embedding[0]
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         return self._request_embedding(text)
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return [self._request_embedding(text) for text in texts]
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        from tqdm import tqdm
+
+        l = []
+        for text in tqdm(texts):
+            try:
+                l.append(self._request_embedding(text))
+            except:
+                l.append([])
+
+        return l
 
 
 def get_embedding_client():
     model_name = "mxbai-embed-large"
-    base_url = "https://localhost:12345"
+    base_url = "http://localhost:11434/"
 
     return OllamaEmbeddingClient(base_url=base_url, model=model_name)
 
 
-def get_embeddings(texts: List[str]) -> List[List[float]]:
+def get_embeddings(texts: list[str]) -> list[list[float]]:
     """Get embeddings for multiple texts."""
     client = get_embedding_client()
     return client.embed_documents(texts)

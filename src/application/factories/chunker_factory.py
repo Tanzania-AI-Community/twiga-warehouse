@@ -1,7 +1,6 @@
 from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType
 from src.infrastructure.chunker.langchain_chunker import LangchainChunker
-from src.infrastructure.chunker.llm_chunker import LLMChunker
-from src.infrastructure.chunker.unstructured_chunker import UnstructuredChunker
+from src.infrastructure.chunker.mathematical_chunker import MathematicalChunker
 
 
 class ChunkerFactory:
@@ -10,13 +9,16 @@ class ChunkerFactory:
 
     def get_chunker(self) -> Chunker:
         if self.config.chunker_type == ChunkerType.UNSTRUCTURED:
-            return UnstructuredChunker(config=self.config)
+            raise ValueError("Unstructured chunker is deprecated. Choose other.")
         
         if self.config.chunker_type == ChunkerType.LANGCHAIN:
             return LangchainChunker(config=self.config)
 
         if self.config.chunker_type == ChunkerType.LLM:
-            return LLMChunker(config=self.config)
+            raise ValueError("LLM chunker is deprecated. Choose other.")
+        
+        if self.config.chunker_type == ChunkerType.MATHEMATICAL:
+            return MathematicalChunker(config=self.config)
 
         else:
             raise ChunkerNotImplementedError(self.config.chunker_type)

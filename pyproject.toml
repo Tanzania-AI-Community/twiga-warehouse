@@ -3,7 +3,7 @@ name = "twiga-warehouse"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "langchain-unstructured>=0.1.6",
     "pdfreader>=0.1.15",
@@ -13,6 +13,11 @@ dependencies = [
     "tqdm>=4.67.1",
     "unstructured-client>=0.34.0",
     "pydantic-settings>=2.10.1",
+    "langchain>=0.3.27",
+    "langchain-community>=0.3.31",
+    "langchain-openai>=0.3.35",
+    "langchain-google-genai>=2.0.5",
+    "mistralai==1.9.11",
 ]
 
 [dependency-groups]
