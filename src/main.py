@@ -10,7 +10,11 @@ from src.config.settings import settings
 from src.domain.entities.book import BookConfig, ClassConfig, ChunkerConfig, SubjectConfig, ResourceConfig
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType
-from src.domain.entities.table_of_contents import TableOfContents
+from src.domain.entities.table_of_contents import (
+    TableOfContents,
+    TableOfContentsParserConfig,
+    TableOfContentsParserType,
+)
 from src.infrastructure.table_of_contents.table_of_contents import get_table_of_contents
 
 
@@ -54,6 +58,12 @@ def create_config(args) -> BookConfig:
 
     resource_config, class_config, subject_config = get_resource_class_and_subject_config(yaml_data)
 
+    toc_parser_config = TableOfContentsParserConfig(
+        parser_type=yaml_data["book_config"].get(
+            "table_of_contents_parser", TableOfContentsParserType.OLLAMA
+        )
+    )
+
     return BookConfig(
         input_path=settings.INPUT_BOOKS_PATH + args.input_dir + args.input_file_name,
         output_path=settings.OUTPUT_BOOKS_PATH + args.output_file_name,
@@ -62,6 +72,7 @@ def create_config(args) -> BookConfig:
         subject=subject_config,
         chunker_config=chunker_config,
         table_of_contents_page_number=comma_separated_ints(yaml_data["book_config"]["table_of_contents_page_number"]),
+        table_of_contents_parser=toc_parser_config,
         first_page_number=yaml_data["book_config"]["first_page_number"],
     )
 
@@ -123,7 +134,9 @@ def main() -> None:
     chunker: Chunker = chunker_factory.get_chunker()
 
     toc: TableOfContents = get_table_of_contents(
-        pdf_path=config.input_path, toc_page_number=config.table_of_contents_page_number
+        pdf_path=config.input_path,
+        toc_page_number=config.table_of_contents_page_number,
+        parser_config=config.table_of_contents_parser,
     )
 
     logging.info(f"Table of contents:\n{toc}")
