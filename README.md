@@ -96,7 +96,7 @@ dagster dev -f src/dagster_defs.py
 
 ```yaml
 ops:
-  run_book_pipeline:
+  collect_params:
     config:
       ocr_pdf: true
       chunker_type: "langchain"
