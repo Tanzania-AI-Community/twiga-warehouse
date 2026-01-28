@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -11,9 +12,6 @@ from src.config.settings import settings
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
 from src.domain.entities.table_of_contents import TableOfContents
-from src.domain.entities.chunk import Chunk
-from src.domain.entities.chunker import Chunker
-from src.domain.entities.table_of_contents import TableOfContents
 from src.infrastructure.embedder.ollama_embedder import get_embeddings
 
 
@@ -23,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 class LangchainChunker(Chunker):
     def chunk(
         self,
-        book_path: str,
+        book_path: Path,
         table_of_contents: TableOfContents,
         text_initial_page: int = None,
         min_length_to_be_included: int = 10,
@@ -95,7 +93,7 @@ class LangchainChunker(Chunker):
 
         print(f"Getting embeddings from {len(documents)} documents...\n")
 
-        embeddings = get_embeddings(parsed_text)
+        embeddings = get_embeddings(parsed_text, model_name=self.config.embedding_model_name)
         for doc, chapter_number, embedding in zip(documents, document_chapters, embeddings):
             chunk = LangchainMapper.map(
                 document=doc,
@@ -106,7 +104,7 @@ class LangchainChunker(Chunker):
             chunks.append(chunk)
         
         if not chunks:
-            raise EmptyChunkerResponse(book_path)
+            raise EmptyChunkerResponse(book_path, self.config)
 
         return chunks
 

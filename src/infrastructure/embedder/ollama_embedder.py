@@ -52,14 +52,17 @@ class OllamaEmbeddingClient:
         return l
 
 
-def get_embedding_client():
-    model_name = "mxbai-embed-large"
-    base_url = "http://localhost:11434/"
+def get_embedding_client(model_name: str | None = None, base_url: str | None = None) -> OllamaEmbeddingClient:
+    resolved_model = model_name or "mxbai-embed-large"
+    resolved_url = (base_url or "http://localhost:11434/").rstrip("/")
+    return OllamaEmbeddingClient(base_url=resolved_url, model=resolved_model)
 
-    return OllamaEmbeddingClient(base_url=base_url, model=model_name)
 
-
-def get_embeddings(texts: list[str]) -> list[list[float]]:
+def get_embeddings(
+    texts: list[str],
+    model_name: str | None = None,
+    base_url: str | None = None,
+) -> list[list[float]]:
     """Get embeddings for multiple texts."""
-    client = get_embedding_client()
+    client = get_embedding_client(model_name=model_name, base_url=base_url)
     return client.embed_documents(texts)

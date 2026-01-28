@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "dagster>=1.7.0",
+    "dagster-webserver>=1.7.0",
     "langchain-unstructured>=0.1.6",
     "pdfreader>=0.1.15",
     "pypdf>=5.4.0",
@@ -23,4 +25,5 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
+    "pytest>=8.2.0",
 ]

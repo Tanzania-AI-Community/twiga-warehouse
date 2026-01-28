@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -23,11 +24,11 @@ Use the page number where the chapter title first appears, and infer sequential 
 """
 
 
-def get_raw_page_text(pdf_path: str, toc_page_number: int | list[int]):
+def get_raw_page_text(pdf_path: Path, toc_page_number: int | list[int]):
     """ Extracts text from a PDF file given a page number or list of page numbers.
 
     Args:
-        pdf_path (str): Path to the PDF file.
+        pdf_path (Path): Path to the PDF file.
         toc_page_number (int | list[int]): Page number or list of page numbers.
 
     Returns:
@@ -47,14 +48,14 @@ def get_raw_page_text(pdf_path: str, toc_page_number: int | list[int]):
 
 
 def get_table_of_contents(
-    pdf_path: str,
+    pdf_path: Path,
     toc_page_number: int | list[int],
     parser_config: TableOfContentsParserConfig,
 ):
     """ Extracts chapter information from table of contents
 
     Args:
-        pdf_path (str): Path to the PDF file.
+        pdf_path (Path): Path to the PDF file.
         toc_page_number (int | list[int]): Page number or list of page numbers.
         parser_config (TableOfContentsParserConfig): Configuration for TOC parsing.
 

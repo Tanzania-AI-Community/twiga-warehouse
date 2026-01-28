@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 from typing import Optional
 
 from pydantic_settings import BaseSettings
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     OUTPUT_BOOKS_PATH: str
 
     class Config:
-        env_file = os.path.join(os.path.dirname(__file__), "../..", ".env")
+        env_file = Path(__file__).resolve().parents[2] / ".env"
         env_file_encoding = "utf-8"
 
 

@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from pathlib import Path
 from enum import Enum
 
 from pydantic import BaseModel
@@ -27,12 +28,17 @@ class Chunker:
         self.config = config
 
     @abstractmethod
-    def chunk(book_path: str, table_of_contents: TableOfContents = None, text_initial_page: int = None) -> list[Chunk]:
+    def chunk(
+        self,
+        book_path: Path,
+        table_of_contents: TableOfContents = None,
+        text_initial_page: int = None,
+    ) -> list[Chunk]:
         pass
 
 
 class EmptyChunkerResponse(Exception):
-    def __init__(self, book_path: str, chunker_config: ChunkerConfig) -> None:
+    def __init__(self, book_path: Path, chunker_config: ChunkerConfig) -> None:
         self.book_path = book_path
         self.chunker_config = chunker_config
 
