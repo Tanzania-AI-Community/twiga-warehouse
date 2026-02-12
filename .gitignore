@@ -7,3 +7,4 @@ __pycache__
 .ipynb_checkpoints/
 notebooks/
 .venv_310
+.tmp_dagster_home__p7pw4dp/

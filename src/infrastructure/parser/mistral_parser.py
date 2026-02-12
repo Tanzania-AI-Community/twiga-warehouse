@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from langchain_core.documents import Document
 import mistralai
 
@@ -5,15 +7,15 @@ from src.config.settings import settings
 
 
 class MistralParser():
-    def __init__(self, book_path: str):
+    def __init__(self, book_path: Path):
         self.client = mistralai.Mistral(api_key=settings.MISTRAL_API_KEY)
-        self.book_path = book_path
+        self.book_path = Path(book_path)
 
     def load(self) -> list[Document]:
         uploaded_pdf = self.client.files.upload(
             file={
-                "file_name": self.book_path,
-                "content": open(self.book_path, "rb"),
+                "file_name": self.book_path.name,
+                "content": self.book_path.open("rb"),
             },
             purpose="ocr",
         )

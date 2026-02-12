@@ -2,6 +2,7 @@ import os
 import pickle
 import re
 import logging
+from pathlib import Path
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -103,7 +104,7 @@ class MathematicalChunker(Chunker):
 
     def chunk(
         self,
-        book_path: str,
+        book_path: Path,
         table_of_contents: TableOfContents,
         text_initial_page: int = None,
     ) -> list[Chunk]:
@@ -188,7 +189,7 @@ class MathematicalChunker(Chunker):
 
         print(f"Getting embeddings from {len(documents)} documents...\n")
 
-        embeddings = get_embeddings(texts=parsed_text)
+        embeddings = get_embeddings(texts=parsed_text, model_name=self.config.embedding_model_name)
         for doc, chapter_number, embedding in zip(documents, document_chapters, embeddings):
             if len(embedding) == 0:
                 continue
@@ -202,7 +203,7 @@ class MathematicalChunker(Chunker):
             chunks.append(chunk)
         
         if not chunks:
-            raise EmptyChunkerResponse(book_path)
+            raise EmptyChunkerResponse(book_path, self.config)
 
         return chunks
 

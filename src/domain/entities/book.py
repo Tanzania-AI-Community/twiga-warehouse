@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Union
 
 from pydantic import BaseModel
@@ -23,8 +24,8 @@ class SubjectConfig(BaseModel):
 
 
 class BookConfig(BaseModel):
-    input_path: str
-    output_path: str
+    input_path: Path
+    output_path: Path
     resource: ResourceConfig
     class_: ClassConfig
     subject: SubjectConfig

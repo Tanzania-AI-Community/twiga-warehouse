@@ -30,7 +30,8 @@ You can also install the dependencies via the `pyptoject.toml` file, if preferre
     # Edit .env as needed
     ```
 
-    The two Unstructured env variables are not mandatory for running the pipeline.
+    The two Unstructured env variables are not mandatory for running the pipeline. Make sure
+    `INPUT_BOOKS_PATH` and `OUTPUT_BOOKS_PATH` point to your input/output directories.
 
 ## Before running the pipeline
 
@@ -38,7 +39,15 @@ Parsing a PDF and splitting its contents in chunks is not an easy task. For this
 
 1. Where should the books placed for their parsing?
 
-You can place the books wherever you want. The only think to take into account is that we are assuming that you will have a directory where all the books will be placed. This directory path should be your `INPUT_BOOKS_PATH` env variable. Inside that directory, you will create a folder for each book to parse. This folder name or relative path will be your `--input_dir` argument. There, you will have 2 files: the book in PDF format (you will use it in `--input_file_name` argument) and a YAML file named `info.yaml`.
+You can place the books wherever you want, as long as the root directory is stored in `INPUT_BOOKS_PATH`. Inside that directory, create a folder per book. We recommend organizing by form and subject, for example:
+
+```
+${INPUT_BOOKS_PATH}/form_4/biology/
+  biology_form_4.pdf
+  info.yaml
+```
+
+For CLI runs, `--input_dir` is the relative path (e.g. `form_4/biology/`) and `--input_file_name` is the PDF filename. For Dagster runs, the `subject_name` and `form` config values are used to build the same structure, and the PDF defaults to `{subject_name}_{form}.pdf` unless overridden.
 
 2. Which format should the PDF have?
 
@@ -74,17 +83,51 @@ Understanding how [Twiga's](https://github.com/Tanzania-AI-Community/twiga) data
 
 ## Usage
 
-You can run the main extraction pipeline using the following commands:
+### Dagster (recommended)
+
+1. Install dependencies (`pip install -e .` or `uv sync`).
+2. Start Dagster:
+
+```sh
+dagster dev -f src/dagster_defs.py
+```
+
+3. Launch the `book_pipeline_job` and provide run config like:
+
+```yaml
+ops:
+  collect_params:
+    config:
+      ocr_pdf: true
+      chunker_type: "langchain"
+      subject_name: "biology"
+      form: "form_4"
+      output_file_name: "biology_form_4.json"
+      embedding_parser: "mxbai-embed-large"
+      page_batch_size: 2
+```
+
+Optional config:
+
+- `input_file_name`: override the default `{subject_name}_{form}.pdf` naming.
+- `ocr_output_file_name`: choose a filename for the OCR output (defaults to `{stem}_ocr.pdf`).
+- `embedding_parser`: Ollama embedding model name (defaults to `mxbai-embed-large`).
+
+Supported `chunker_type` values are `langchain` and `mathematical` (LLM/unstructured chunkers are deprecated in code).
+
+### CLI
+
+You can also run the main extraction pipeline from the command line:
 
 ```sh
 python3 -m src.main --chunker_type langchain --input_dir "form_4/biology/" --input_file_name "biology_form_4.pdf" --output_file_name "biology_form_4.json"
 ```
 
 ```sh
-python3 -m src.main --chunker_type llm --input_dir "form_3/history/" --input_file_name "history_form_3.pdf" --output_file_name "history_test_4.json" --page_batch_size 2
+python3 -m src.main --chunker_type mathematical --input_dir "form_3/history/" --input_file_name "history_form_3.pdf" --output_file_name "history_form_3.json"
 ```
 
-An explanation of the arguments allowed can be found in `src.main.py`.
+An explanation of the arguments allowed can be found in `src/main.py`.
 
 ## Project Structure
 

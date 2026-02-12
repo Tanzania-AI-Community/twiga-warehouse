@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 
 import logging
 from pydantic import BaseModel, Field
@@ -37,7 +38,7 @@ class LLMChapterBook(BaseModel):
 class LLMChunker(Chunker):
     def chunk(
         self,
-        book_path: str,
+        book_path: Path,
         table_of_contents: TableOfContents,
         text_initial_page: int = None,
     ) -> list[Chunk]:
@@ -108,7 +109,7 @@ class LLMChunker(Chunker):
             chunks.append(chunk)
         
         if not chunks:
-            raise EmptyChunkerResponse(book_path)
+            raise EmptyChunkerResponse(book_path, self.config)
 
         return chunks
 
@@ -168,7 +169,7 @@ class LLMChunker(Chunker):
         return embeddings
 
     @staticmethod
-    def _get_text_from_page_range(pdf_path: str, initial_page: int, end_page: int) -> str:
+    def _get_text_from_page_range(pdf_path: Path, initial_page: int, end_page: int) -> str:
         reader = PdfReader(pdf_path)
 
         text = ""
