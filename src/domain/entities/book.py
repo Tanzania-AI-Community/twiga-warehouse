@@ -3,6 +3,7 @@ from typing import Union
 from pydantic import BaseModel
 
 from src.domain.entities.chunker import ChunkerConfig
+from src.domain.entities.table_of_contents import TableOfContentsParserConfig
 
 
 class ResourceConfig(BaseModel):
@@ -29,4 +30,5 @@ class BookConfig(BaseModel):
     subject: SubjectConfig
     chunker_config: ChunkerConfig
     table_of_contents_page_number: Union[int|list[int]]
+    table_of_contents_parser: TableOfContentsParserConfig
     first_page_number: int
