@@ -1784,6 +1784,21 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-together"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/67/b2f8a2ab856fe962905c3cdb2c96d531f6cf7ae74b55c6c0380b52f6c99d/langchain_together-0.3.1.tar.gz", hash = "sha256:123a3d6da11c3a32c6e7653f9b52a7793789ddba5a871a2392db0ee3d389be78", size = 10664, upload-time = "2025-08-01T17:14:21.877Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/94/69a4cae7c37a5619c610cc443ca8cdad5495438aed3f72fa936ed38cadf3/langchain_together-0.3.1-py3-none-any.whl", hash = "sha256:f6638c3a1db2732a3e62ed0fdfbac0653765f0e561e7082320952731846945b2", size = 12879, upload-time = "2025-08-01T17:14:20.888Z" },
+]
+
+[[package]]
 name = "langchain-unstructured"
 version = "0.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -3775,6 +3790,7 @@ dependencies = [
     { name = "langchain-community" },
     { name = "langchain-google-genai" },
     { name = "langchain-openai" },
+    { name = "langchain-together" },
     { name = "langchain-unstructured" },
     { name = "mistralai" },
     { name = "pdfreader" },
@@ -3800,6 +3816,7 @@ requires-dist = [
     { name = "langchain-community", specifier = ">=0.3.31" },
     { name = "langchain-google-genai", specifier = ">=2.0.5" },
     { name = "langchain-openai", specifier = ">=0.3.35" },
+    { name = "langchain-together", specifier = ">=0.3.1" },
     { name = "langchain-unstructured", specifier = ">=0.1.6" },
     { name = "mistralai", specifier = "==1.9.11" },
     { name = "pdfreader", specifier = ">=0.1.15" },

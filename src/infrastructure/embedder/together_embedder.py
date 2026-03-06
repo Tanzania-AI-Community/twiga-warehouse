@@ -1,6 +1,6 @@
 import logging
 
-from together import Together
+from langchain_together.embeddings import TogetherEmbeddings
 
 
 logger = logging.getLogger(__name__)
@@ -20,34 +20,22 @@ def resolve_embedding_model_name(model_name: str | None) -> str:
 
 class TogetherEmbedder:
     def __init__(self, api_key: str, model: str):
-        self.client = Together(api_key=api_key)
-        self.model = model
-
-    def _request_embeddings(self, texts: list[str]) -> list[list[float]]:
-        response = self.client.embeddings.create(
-            model=self.model,
-            input=texts,
+        self.client = TogetherEmbeddings(
+            model=model,
+            api_key=api_key,
         )
 
-        if response.data is None:
-            raise ValueError("Together response did not include embeddings data")
-
-        embeddings: list[list[float]] = []
-        for index, embedding_data in enumerate(response.data):
-            if embedding_data.embedding is None:
-                raise ValueError(f"Together response missing embedding for text index {index}")
-            embeddings.append(embedding_data.embedding)
-
+    def _request_embeddings(self, texts: list[str]) -> list[list[float]]:
+        embeddings = self.client.embed_documents(texts)
         if len(embeddings) != len(texts):
             raise ValueError(
                 "Together response embedding count did not match input size "
                 f"({len(embeddings)} != {len(texts)})."
             )
-
         return embeddings
 
     def embed_query(self, text: str) -> list[float]:
-        return self._request_embeddings([text])[0]
+        return self.client.embed_query(text)
 
     def embed_documents(self, texts: list[str], batch_size: int = 16) -> list[list[float]]:
         from tqdm import tqdm

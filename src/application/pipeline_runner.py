@@ -88,6 +88,14 @@ def get_resource_class_and_subject_config(
     return resource_config, class_config, subject_config
 
 
+def _default_toc_parser_for_embedder_provider(
+    embedding_provider: EmbedderProvider,
+) -> TableOfContentsParserType:
+    if embedding_provider == EmbedderProvider.TOGETHER:
+        return TableOfContentsParserType.TOGETHER
+    return TableOfContentsParserType.OLLAMA
+
+
 def build_book_config(
     info_path: Path,
     input_path: Path,
@@ -114,10 +122,13 @@ def build_book_config(
 
     resource_config, class_config, subject_config = get_resource_class_and_subject_config(yaml_data)
 
+    configured_toc_parser = yaml_data["book_config"].get("table_of_contents_parser")
+    resolved_toc_parser = configured_toc_parser or _default_toc_parser_for_embedder_provider(
+        embedding_provider
+    )
+
     toc_parser_config = TableOfContentsParserConfig(
-        parser_type=yaml_data["book_config"].get(
-            "table_of_contents_parser", TableOfContentsParserType.OLLAMA
-        )
+        parser_type=resolved_toc_parser
     )
 
     return BookConfig(
