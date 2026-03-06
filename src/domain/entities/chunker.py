@@ -15,11 +15,17 @@ class ChunkerType(str, Enum):
     MATHEMATICAL = "mathematical"
 
 
+class EmbedderProvider(str, Enum):
+    OLLAMA = "ollama"
+    TOGETHER = "together"
+
+
 class ChunkerConfig(BaseModel):
     chunker_type: ChunkerType
     last_page_number: int | None = None
     llm_model_name: str | None = None
     embedding_model_name: str | None = None
+    embedding_provider: EmbedderProvider = EmbedderProvider.TOGETHER
     page_batch_size: int | None = None
 
 

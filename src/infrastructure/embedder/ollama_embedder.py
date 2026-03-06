@@ -6,6 +6,18 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+EMBEDDING_MODELS = {
+    "multilingual-large": "intfloat/multilingual-e5-large-instruct",  # 1024 dimensions
+}
+DEFAULT_EMBEDDING_MODEL = EMBEDDING_MODELS["multilingual-large"]
+
+
+def resolve_embedding_model_name(model_name: str | None) -> str:
+    if model_name is None:
+        return DEFAULT_EMBEDDING_MODEL
+    return EMBEDDING_MODELS.get(model_name, model_name)
+
+
 class OllamaEmbeddingClient:
     """Simple HTTP client for retrieving embeddings from an Ollama server."""
 
@@ -53,7 +65,7 @@ class OllamaEmbeddingClient:
 
 
 def get_embedding_client(model_name: str | None = None, base_url: str | None = None) -> OllamaEmbeddingClient:
-    resolved_model = model_name or "mxbai-embed-large"
+    resolved_model = resolve_embedding_model_name(model_name)
     resolved_url = (base_url or "http://localhost:11434/").rstrip("/")
     return OllamaEmbeddingClient(base_url=resolved_url, model=resolved_model)
 

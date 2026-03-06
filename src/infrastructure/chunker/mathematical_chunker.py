@@ -11,8 +11,8 @@ from src.application.mappers.langchain_mapper import LangchainMapper
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
 from src.domain.entities.table_of_contents import TableOfContents
+from src.infrastructure.embedder.embedding_router import get_embeddings
 from src.infrastructure.parser.mistral_parser import MistralParser
-from src.infrastructure.embedder.ollama_embedder import get_embeddings
 
 logging.basicConfig(level=logging.INFO)
 
@@ -189,7 +189,11 @@ class MathematicalChunker(Chunker):
 
         print(f"Getting embeddings from {len(documents)} documents...\n")
 
-        embeddings = get_embeddings(texts=parsed_text, model_name=self.config.embedding_model_name)
+        embeddings = get_embeddings(
+            texts=parsed_text,
+            provider=self.config.embedding_provider,
+            model_name=self.config.embedding_model_name,
+        )
         for doc, chapter_number, embedding in zip(documents, document_chapters, embeddings):
             if len(embedding) == 0:
                 continue
