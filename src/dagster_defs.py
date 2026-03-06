@@ -5,6 +5,7 @@ from dagster import Config, Definitions, job, op
 
 from src.application.pipeline_runner import (
     DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_PROVIDER,
     DEFAULT_LLM_MODEL,
     build_book_config,
     derive_input_file_name,
@@ -13,7 +14,7 @@ from src.application.pipeline_runner import (
     run_pipeline,
     write_output,
 )
-from src.domain.entities.chunker import ChunkerType
+from src.domain.entities.chunker import ChunkerType, EmbedderProvider
 
 
 SUPPORTED_CHUNKERS = (ChunkerType.LANGCHAIN, ChunkerType.MATHEMATICAL)
@@ -27,6 +28,7 @@ class PipelineParams:
     form: str
     output_file_name: str
     embedding_parser: str
+    embedding_provider: EmbedderProvider
     llm_model: str
     page_batch_size: int | None
     input_file_name: str | None
@@ -47,6 +49,7 @@ class PipelineRunConfig(Config):
     form: str
     output_file_name: str
     embedding_parser: str = DEFAULT_EMBEDDING_MODEL
+    embedding_provider: EmbedderProvider = DEFAULT_EMBEDDING_PROVIDER
     llm_model: str = DEFAULT_LLM_MODEL
     page_batch_size: int | None = None
     input_file_name: str | None = None
@@ -67,6 +70,7 @@ def collect_params(config: PipelineRunConfig) -> PipelineParams:
         form=config.form,
         output_file_name=config.output_file_name,
         embedding_parser=config.embedding_parser,
+        embedding_provider=config.embedding_provider,
         llm_model=config.llm_model,
         page_batch_size=config.page_batch_size,
         input_file_name=config.input_file_name,
@@ -116,6 +120,7 @@ def build_config_op(params: PipelineParams, paths: PathBundle, input_path: Path)
         chunker_type=params.chunker_type,
         llm_model_name=params.llm_model,
         embedding_model_name=params.embedding_parser,
+        embedding_provider=params.embedding_provider,
         page_batch_size=params.page_batch_size,
     )
 

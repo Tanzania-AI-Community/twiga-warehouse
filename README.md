@@ -103,7 +103,8 @@ ops:
       subject_name: "biology"
       form: "form_4"
       output_file_name: "biology_form_4.json"
-      embedding_parser: "mxbai-embed-large"
+      embedding_parser: "intfloat/multilingual-e5-large-instruct"
+      embedding_provider: "ollama"
       page_batch_size: 2
 ```
 
@@ -111,7 +112,8 @@ Optional config:
 
 - `input_file_name`: override the default `{subject_name}_{form}.pdf` naming.
 - `ocr_output_file_name`: choose a filename for the OCR output (defaults to `{stem}_ocr.pdf`).
-- `embedding_parser`: Ollama embedding model name (defaults to `mxbai-embed-large`).
+- `embedding_parser`: Embedding model name (defaults to `intfloat/multilingual-e5-large-instruct`).
+- `embedding_provider`: Embedding provider (`ollama` by default, can be `together`).
 
 Supported `chunker_type` values are `langchain` and `mathematical` (LLM/unstructured chunkers are deprecated in code).
 

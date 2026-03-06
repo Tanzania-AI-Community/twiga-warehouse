@@ -3,13 +3,14 @@ from pathlib import Path
 
 from src.application.pipeline_runner import (
     DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_PROVIDER,
     DEFAULT_LLM_MODEL,
     build_book_config,
     resolve_book_paths,
     run_pipeline,
     write_output,
 )
-from src.domain.entities.chunker import ChunkerType
+from src.domain.entities.chunker import ChunkerType, EmbedderProvider
 
 
 def main() -> None:
@@ -55,7 +56,18 @@ def main() -> None:
         type=str,
         required=False,
         default=DEFAULT_EMBEDDING_MODEL,
-        help="Ollama embedding model used for chunk embeddings.",
+        help="Embedding model used for chunk embeddings.",
+    )
+    parser.add_argument(
+        "--embedding_provider",
+        type=EmbedderProvider,
+        required=False,
+        default=DEFAULT_EMBEDDING_PROVIDER,
+        choices=[
+            EmbedderProvider.OLLAMA,
+            EmbedderProvider.TOGETHER,
+        ],
+        help="Embedding provider to use (ollama or together).",
     )
     parser.add_argument(
         "--page_batch_size",
@@ -80,6 +92,7 @@ def main() -> None:
         chunker_type=args.chunker_type,
         llm_model_name=args.llm_model,
         embedding_model_name=args.embedding_model,
+        embedding_provider=args.embedding_provider,
         page_batch_size=args.page_batch_size,
     )
 

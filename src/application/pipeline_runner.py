@@ -10,7 +10,7 @@ from src.application.factories.chunker_factory import ChunkerFactory
 from src.config.settings import settings
 from src.domain.entities.book import BookConfig, ClassConfig, ResourceConfig, SubjectConfig
 from src.domain.entities.chunk import Chunk
-from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType
+from src.domain.entities.chunker import Chunker, ChunkerConfig, ChunkerType, EmbedderProvider
 from src.domain.entities.table_of_contents import (
     TableOfContents,
     TableOfContentsParserConfig,
@@ -20,7 +20,8 @@ from src.infrastructure.table_of_contents.table_of_contents import get_table_of_
 
 
 DEFAULT_LLM_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
-DEFAULT_EMBEDDING_MODEL = "mxbai-embed-large"
+DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
+DEFAULT_EMBEDDING_PROVIDER = EmbedderProvider.TOGETHER
 
 
 def parse_comma_separated_ints(value: str) -> list[int]:
@@ -95,6 +96,7 @@ def build_book_config(
     chunker_type: ChunkerType,
     llm_model_name: str | None = None,
     embedding_model_name: str | None = None,
+    embedding_provider: EmbedderProvider = DEFAULT_EMBEDDING_PROVIDER,
     page_batch_size: int | None = None,
 ) -> BookConfig:
     yaml_data = load_info_yaml(info_path)
@@ -107,6 +109,7 @@ def build_book_config(
         page_batch_size=page_batch_size,
         llm_model_name=resolved_llm_model,
         embedding_model_name=resolved_embedding_model,
+        embedding_provider=embedding_provider,
     )
 
     resource_config, class_config, subject_config = get_resource_class_and_subject_config(yaml_data)
