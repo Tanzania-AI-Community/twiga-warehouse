@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 class FirecrawlParser:
     def __init__(self, book_path: Path):
-        self.client = Firecrawl(api_key=settings.FIRECRAWL_API_KEY,)
+        self.client = Firecrawl(api_key=settings.FIRECRAWL_API_KEY)
         self.book_path = Path(book_path)
 
     def load(self) -> list[Document]:
