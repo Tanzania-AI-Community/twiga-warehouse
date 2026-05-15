@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     TOGETHER_AI_API_KEY: Optional[str]
     GOOGLE_AI_API_KEY: Optional[str]
     MISTRAL_API_KEY: Optional[str]
+    FIRECRAWL_API_KEY: Optional[str]
     UNSTRUCTURED_API_KEY: Optional[str]
     UNSTRUCTURED_API_URL: Optional[str]
     INPUT_BOOKS_PATH: str

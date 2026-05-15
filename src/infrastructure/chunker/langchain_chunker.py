@@ -1,22 +1,17 @@
-import math
+import re
 from pathlib import Path
-
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 import logging
-from tqdm import tqdm
 
-from src.application.mappers.langchain_mapper import LangchainMapper
 from src.config.settings import settings
 from src.domain.entities.chunk import Chunk
 from src.domain.entities.chunker import Chunker, EmptyChunkerResponse
 from src.domain.entities.table_of_contents import TableOfContents
 from src.infrastructure.embedder.embedding_router import get_embeddings
-
+from src.infrastructure.parser.firecrawl_parser import FirecrawlParser
 
 logging.basicConfig(level=logging.INFO)
-
 
 class LangchainChunker(Chunker):
     def chunk(
@@ -24,93 +19,97 @@ class LangchainChunker(Chunker):
         book_path: Path,
         table_of_contents: TableOfContents,
         text_initial_page: int = None,
-        min_length_to_be_included: int = 10,
+        min_length_to_be_included: int = 100,
     ) -> list[Chunk]:
-        loader = PyPDFLoader(book_path)
-        docs = loader.load()
         
-        page_of_initial_chapter = (
-            table_of_contents.chapters[0].start_page + text_initial_page
-            if table_of_contents.chapters and text_initial_page
-            else 0
-        )
+        parser = FirecrawlParser(book_path=book_path)
+        docs = parser.load() 
 
-        separators = [
-            "FOR ONLINE USE ONLY",
-            "DO NOT DUPLICATE",
-            "PROPERTY OF THE UNITED REPUBLIC OF TANZANIA GOBVERNMENT",
-            "Ministry of Education, Science and Technology",
-            "For Online Use Only",
-            "Student’s Book Form Two",
-            "Geography for Secondary Schools",
+        full_markdown_text = ""
+        for doc in docs:
+            clean_md = self.clean_textbook_content(doc.page_content)            
+            page_num = doc.metadata.get("page_number")
+            if not str(page_num).isdigit():
+                page_num = 0
+            
+
+            full_markdown_text += f"\n\n\n\n{clean_md}"
+            
+        headers_to_split_on = [
+            ("#", "Header_1"),       
+            ("##", "Header_2"),      
+            ("###", "Header_3"),     
         ]
-
-        default_separators = [
-            "\n\n",
-            "\n",
-            " ",
-            "",
-        ]
-
-        text_splitter = RecursiveCharacterTextSplitter(
-            separators=separators + default_separators,
-            keep_separator=False,
-            chunk_size=250,
-            chunk_overlap=30,
+        
+        markdown_splitter = MarkdownHeaderTextSplitter(
+            headers_to_split_on=headers_to_split_on,
+            strip_headers=False 
         )
+        md_header_splits = markdown_splitter.split_text(full_markdown_text)
 
-        initial_documents: list[Document] = text_splitter.split_documents(docs)
+        char_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1500, 
+            chunk_overlap=150
+        )
+        all_splits = char_splitter.split_documents(md_header_splits)
+        
+        current_page = docs[0].metadata.get("page_number", 1) if docs else 1
+        if not str(current_page).isdigit():
+            current_page = 1
 
-        documents: list[Document] = []
-        document_chapters: list[int] = []
-        parsed_text: list[str] = []
 
-        for doc in initial_documents:
-            doc_page = int(doc.metadata["page_label"])
-            if doc_page < page_of_initial_chapter - 1:
-                continue
+        clean_texts = []
+        page_numbers = []
+        chapter_numbers = []
+        metadatas = []
 
-            page_content: str = doc.page_content
 
-            for unwanted_text in separators:  # just in case
-                page_content = page_content.replace(unwanted_text, "")
+        for split in all_splits:
 
-            if len(page_content) < min_length_to_be_included:
-                continue
+            page_matches = re.findall(r"", split.page_content)
+            valid_pages = [p for p in page_matches if p.strip().isdigit()]
+            
+            if valid_pages:
+                current_page = int(valid_pages[-1])
+                
+            clean_content = re.sub(r"\n*", "", split.page_content).strip()
+            
+            if len(clean_content) >= min_length_to_be_included:
+                doc_chapter = self.get_document_chapter(current_page, text_initial_page or 0, table_of_contents)
+                
+                # Append to our parallel lists
+                clean_texts.append(clean_content)
+                page_numbers.append(current_page)
+                chapter_numbers.append(doc_chapter)
+                
 
-            doc.page_content = page_content
-            doc_chapter = self.get_document_chapter(
-                doc_page=doc_page,
-                text_initial_page=text_initial_page,
-                table_of_contents=table_of_contents,
-            )
+                split.metadata["page_number"] = current_page
+                metadatas.append(split.metadata)
 
-            documents.append(doc)
-            document_chapters.append(doc_chapter)
-            parsed_text.append(page_content)
-
-        chunks: list[Chunk] = []        
-
-        print(f"Getting embeddings from {len(documents)} documents...\n")
-
+        
         embeddings = get_embeddings(
-            parsed_text,
+            clean_texts,
             provider=self.config.embedding_provider,
             model_name=self.config.embedding_model_name,
         )
-        for doc, chapter_number, embedding in zip(documents, document_chapters, embeddings):
-            chunk = LangchainMapper.map(
-                document=doc,
-                content_embedding=embedding,
-                chapter_number=chapter_number,
-                text_initial_page=text_initial_page,
-            )
-            chunks.append(chunk)
+
+        final_chunks = []
         
-        if not chunks:
+        for i, (text, page_num, chapter_num, meta, emb) in enumerate(zip(clean_texts, page_numbers, chapter_numbers, metadatas, embeddings)):
+            chunk = Chunk(
+                chunk_id=i, 
+                content=text,
+                metadata=meta,
+                chapter_number=chapter_num,  
+                page_number=page_num,        
+                embedding=emb                
+            )
+            final_chunks.append(chunk)
+            
+        if not final_chunks:
             raise EmptyChunkerResponse(book_path, self.config)
 
-        return chunks
+        return final_chunks
 
     @staticmethod
     def get_document_chapter(doc_page: int, text_initial_page: int, table_of_contents: TableOfContents) -> int:
@@ -118,7 +117,27 @@ class LangchainChunker(Chunker):
         for chapter in table_of_contents.chapters:
             if doc_page < chapter.start_page + text_initial_page - 1:
                 break
-            
             doc_chapter = chapter.number
-        
         return doc_chapter
+    
+    @staticmethod
+    def clean_textbook_content(text: str) -> str:
+        watermarks = [
+            r"(?i)property of the united republic of tanzania government",
+            r"PROPER Ot hte ONT Ee REE ODL Ot TANZANIA OOD VERN",
+            r"(?i)for online use only",
+            r"INE USE ONLY",
+            r"(?i)do not duplicate",
+            r"OT DUPLICATE",
+            r"©.*?Se,?",       
+            r"ne \| ee"        
+        ]
+        
+        for wm in watermarks:
+            text = re.sub(wm, "", text)
+            
+        text = re.sub(r"(?i)source:\s*https?://\S+", "", text)
+        text = re.sub(r" {2,}", " ", text)       
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        
+        return text.strip()
