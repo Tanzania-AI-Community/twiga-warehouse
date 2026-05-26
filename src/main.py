@@ -1,16 +1,23 @@
 import argparse
 from pathlib import Path
 
-from src.application.pipeline_runner import (
+from src.models import (
+    ChunkerType,
+    EmbedderProvider,
+    ParserType,
+    PipelineRequest,
+    ProcessingOptions,
+    RuntimeOptions,
+    TableOfContentsParserType,
+)
+from src.pipeline import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_EMBEDDING_PROVIDER,
-    DEFAULT_LLM_MODEL,
-    build_book_config,
+    DEFAULT_TOC_PARSER_TYPE,
+    build_book_definition,
     resolve_book_paths,
-    run_pipeline,
-    write_output,
+    run_and_write_pipeline,
 )
-from src.domain.entities.chunker import ChunkerType, EmbedderProvider
 
 
 def main() -> None:
@@ -18,13 +25,24 @@ def main() -> None:
 
     parser.add_argument(
         "--chunker_type",
-        type=ChunkerType,
+        type=str,
         required=True,
         choices=[
-            ChunkerType.LANGCHAIN,
-            ChunkerType.MATHEMATICAL,
+            ChunkerType.LANGCHAIN.value,
+            ChunkerType.MATHEMATICAL.value,
         ],
         help="Specify which chunker to use (langchain or mathematical).",
+    )
+    parser.add_argument(
+        "--parser_type",
+        type=str,
+        required=False,
+        default=None,
+        choices=[
+            ParserType.PDF.value,
+            ParserType.MISTRAL.value,
+        ],
+        help="Optional parser override.",
     )
     parser.add_argument(
         "--input_dir",
@@ -45,13 +63,6 @@ def main() -> None:
         help="Filename of the output JSON to write under OUTPUT_BOOKS_PATH.",
     )
     parser.add_argument(
-        "--llm_model",
-        type=str,
-        required=False,
-        default=DEFAULT_LLM_MODEL,
-        help="Model to use if using the LLM-based chunker.",
-    )
-    parser.add_argument(
         "--embedding_model",
         type=str,
         required=False,
@@ -60,44 +71,67 @@ def main() -> None:
     )
     parser.add_argument(
         "--embedding_provider",
-        type=EmbedderProvider,
+        type=str,
         required=False,
-        default=DEFAULT_EMBEDDING_PROVIDER,
+        default=DEFAULT_EMBEDDING_PROVIDER.value,
         choices=[
-            EmbedderProvider.OLLAMA,
-            EmbedderProvider.TOGETHER,
+            EmbedderProvider.OLLAMA.value,
+            EmbedderProvider.TOGETHER.value,
         ],
         help="Embedding provider to use (ollama or together).",
     )
     parser.add_argument(
-        "--page_batch_size",
-        type=int,
-        default=None,
+        "--toc_parser_type",
+        type=str,
         required=False,
-        help="Batch size of chunked pages when using the LLM chunker.",
+        default=DEFAULT_TOC_PARSER_TYPE.value,
+        choices=[
+            TableOfContentsParserType.GEMINI.value,
+            TableOfContentsParserType.TOGETHER.value,
+            TableOfContentsParserType.OLLAMA.value,
+            TableOfContentsParserType.NONE.value,
+        ],
+        help="Parser to use for table of contents extraction.",
+    )
+    parser.add_argument(
+        "--ocr_pdf",
+        action="store_true",
+        help="Run OCRmyPDF before parsing.",
+    )
+    parser.add_argument(
+        "--ocr_output_file_name",
+        type=str,
+        required=False,
+        default=None,
+        help="Optional output filename for the OCR PDF.",
     )
 
     args = parser.parse_args()
 
-    info_path, input_path, output_path = resolve_book_paths(
-        Path(args.input_dir),
-        args.input_file_name,
-        args.output_file_name,
+    paths = resolve_book_paths(
+        input_dir=Path(args.input_dir),
+        input_file_name=args.input_file_name,
+        output_file_name=args.output_file_name,
     )
+    book_definition = build_book_definition(paths=paths)
 
-    config = build_book_config(
-        info_path=info_path,
-        input_path=input_path,
-        output_path=output_path,
-        chunker_type=args.chunker_type,
-        llm_model_name=args.llm_model,
+    processing_options = ProcessingOptions(
+        chunker_type=ChunkerType(args.chunker_type),
+        parser_type=ParserType(args.parser_type) if args.parser_type else None,
+        toc_parser_type=TableOfContentsParserType(args.toc_parser_type),
+        embedding_provider=EmbedderProvider(args.embedding_provider),
         embedding_model_name=args.embedding_model,
-        embedding_provider=args.embedding_provider,
-        page_batch_size=args.page_batch_size,
     )
-
-    output_payload = run_pipeline(config)
-    write_output(config.output_path, output_payload)
+    runtime_options = RuntimeOptions(
+        ocr_pdf=args.ocr_pdf,
+        ocr_output_file_name=args.ocr_output_file_name,
+    )
+    request = PipelineRequest(
+        book=book_definition,
+        processing=processing_options,
+        runtime=runtime_options,
+    )
+    run_and_write_pipeline(request=request)
 
 
 if __name__ == "__main__":
