@@ -20,6 +20,10 @@ dependencies = [
     "langchain-openai>=0.3.35",
     "langchain-google-genai>=2.0.5",
     "mistralai==1.9.11",
+    "openai>=2.8.1",
+    "fitz>=0.0.1.dev2",
+    "pymupdf>=1.27.2.3",
+    "modal>=1.4.3",
 ]
 
 [dependency-groups]
