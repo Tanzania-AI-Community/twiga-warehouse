@@ -32,20 +32,27 @@ def run_pipeline(
         parser_type=request.processing.parser_type,
     )
     resolved_input_path = prepare_input_path(request=request)
+    resolved_toc_parser_type = resolve_toc_parser_type(
+        parser_type=resolved_parser_type,
+        toc_parser_type=request.processing.toc_parser_type,
+    )
     table_of_contents = extract_table_of_contents(
         pdf_path=resolved_input_path,
         toc_page_numbers=request.book.pagination.table_of_contents_page_numbers,
         parser_config=TableOfContentsParserConfig(
-            parser_type=request.processing.toc_parser_type,
+            parser_type=resolved_toc_parser_type,
         ),
     )
     parser = get_parser(parser_type=resolved_parser_type)
+    print(parser)
     parsed_document = parser.parse(
         pdf_path=resolved_input_path,
         table_of_contents=table_of_contents,
         first_page_number=request.book.pagination.first_page_number,
     )
+    print(parsed_document)
 
+    return
     chunker = get_chunker(chunker_type=request.processing.chunker_type)
     text_chunks = chunker.chunk(
         parsed_document=parsed_document,
@@ -65,6 +72,7 @@ def run_pipeline(
             "processing": request.processing.model_copy(
                 update={
                     "parser_type": resolved_parser_type,
+                    "toc_parser_type": resolved_toc_parser_type,
                     "embedding_model_name": request.processing.embedding_model_name
                     or DEFAULT_EMBEDDING_MODEL,
                 }
@@ -119,6 +127,19 @@ def resolve_parser_type(
         return ParserType.MISTRAL
 
     return ParserType.PDF
+
+
+def resolve_toc_parser_type(
+    parser_type: ParserType,
+    toc_parser_type: TableOfContentsParserType,
+) -> TableOfContentsParserType:
+    if toc_parser_type == TableOfContentsParserType.NONE:
+        return toc_parser_type
+
+    if parser_type == ParserType.HOSTED:
+        return TableOfContentsParserType.HOSTED
+
+    return toc_parser_type
 
 
 def get_parser(

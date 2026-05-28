@@ -101,3 +101,14 @@ def test_hosted_parser_decodes_fenced_json_response() -> None:
     )
 
     assert payload == {"pages": [{"page_number": 1, "markdown": "hello"}]}
+
+
+def test_hosted_parser_accepts_string_page_numbers() -> None:
+    parsed_pages = HostedParser._response_to_parsed_pages(
+        response_payload={"pages": [{"page_number": "2", "markdown": "hello"}]},
+        pdf_start_page=5,
+        pdf_end_page=6,
+    )
+
+    assert [page.page_number for page in parsed_pages] == [6]
+    assert [page.text for page in parsed_pages] == ["hello\n"]

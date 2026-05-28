@@ -17,6 +17,7 @@ class TableOfContentsParserType(str, Enum):
     GEMINI = "gemini"
     TOGETHER = "together"
     OLLAMA = "ollama"
+    HOSTED = "hosted"
     NONE = "none"
 
 

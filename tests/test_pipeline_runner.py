@@ -84,3 +84,45 @@ def test_run_pipeline_passes_toc_to_hosted_parser(monkeypatch, tmp_path: Path) -
         "first_page_number": 5,
     }
     assert payload["table_of_contents"] == expected_toc.model_dump()
+
+
+def test_run_pipeline_uses_hosted_toc_parser_for_hosted_document_parser(monkeypatch, tmp_path: Path) -> None:
+    request = _build_request(pdf_path=tmp_path / "book.pdf").model_copy(
+        update={
+            "processing": _build_request(pdf_path=tmp_path / "book.pdf").processing.model_copy(
+                update={"toc_parser_type": TableOfContentsParserType.TOGETHER}
+            )
+        }
+    )
+    expected_toc = TableOfContents(chapters=[Chapter(name="Chapter 1", number=1, start_page=1)])
+    captured: dict[str, object] = {}
+
+    class _FakeParser:
+        def parse(self, *, pdf_path: Path, table_of_contents: TableOfContents | None = None, first_page_number: int = 1):
+            del pdf_path, table_of_contents, first_page_number
+            return ParsedDocument(pages=[ParsedPage(page_number=5, text="chapter text")])
+
+    class _FakeChunker:
+        def chunk(self, *, parsed_document: ParsedDocument, table_of_contents: TableOfContents, first_page_number: int, last_page_number: int | None = None):
+            del parsed_document, table_of_contents, first_page_number, last_page_number
+            return [TextChunk(content="chapter text", page_number=1, chapter_number=1)]
+
+    def _fake_extract_table_of_contents(**kwargs):
+        captured["toc_parser_type"] = kwargs["parser_config"].parser_type
+        return expected_toc
+
+    monkeypatch.setattr("src.pipeline.runner.prepare_input_path", lambda request: request.book.source_paths.input_path)
+    monkeypatch.setattr("src.pipeline.runner.extract_table_of_contents", _fake_extract_table_of_contents)
+    monkeypatch.setattr("src.pipeline.runner.get_parser", lambda parser_type: _FakeParser())
+    monkeypatch.setattr("src.pipeline.runner.get_chunker", lambda chunker_type: _FakeChunker())
+    monkeypatch.setattr(
+        "src.pipeline.runner.create_embedded_chunks",
+        lambda **kwargs: [
+            EmbeddedChunk(content="chapter text", page_number=1, chapter_number=1, embedding=[0.1, 0.2])
+        ],
+    )
+
+    payload = run_pipeline(request=request)
+
+    assert captured["toc_parser_type"] == TableOfContentsParserType.HOSTED
+    assert payload["processing"]["toc_parser_type"] == TableOfContentsParserType.HOSTED.value

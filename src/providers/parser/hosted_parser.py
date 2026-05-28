@@ -1,14 +1,12 @@
-import base64
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
 import fitz
-from openai import OpenAI
+from tqdm import tqdm
 
-from src.config.settings import settings
 from src.models.document import ParsedDocument, ParsedPage
 from src.models.toc import Chapter, TableOfContents
+from src.providers.nuextract import NuExtractClient
 
 
 @dataclass(frozen=True)
@@ -19,26 +17,29 @@ class ChapterRange:
 
 
 class HostedParser:
-    MODEL_NAME = "numind/NuExtract3"
+    PAGE_MARKDOWN_TEMPLATE = {
+        "pages": [
+            {
+                "page_number": "integer",
+                "markdown": "string",
+            }
+        ]
+    }
 
     def __init__(
         self,
         base_url: str | None = None,
-        model_name: str = MODEL_NAME,
+        model_name: str = NuExtractClient.MODEL_NAME,
         dpi: int = 100,
         temperature: float = 0.2,
     ):
-        resolved_base_url = self._resolve_base_url(base_url=base_url)
-        if not resolved_base_url:
-            raise ValueError("CUSTOM_OCR_MODEL_URL is required to use the hosted OCR parser.")
-
-        self.client = OpenAI(
-            api_key=settings.CUSTOM_OCR_MODEL_API_KEY,
-            base_url=resolved_base_url,
+        self.nuextract_client = NuExtractClient(
+            base_url=base_url,
+            model_name=model_name,
+            dpi=dpi,
+            temperature=temperature,
         )
-        self.base_url = resolved_base_url
-        self.model_name = model_name
-        self.dpi = dpi
+        self.base_url = self.nuextract_client.base_url
         self.temperature = temperature
 
     def parse(
@@ -47,6 +48,7 @@ class HostedParser:
         table_of_contents: TableOfContents | None = None,
         first_page_number: int = 1,
     ) -> ParsedDocument:
+        print("I'm inside")
         normalized_path = Path(pdf_path)
         pages: list[ParsedPage] = []
 
@@ -57,7 +59,9 @@ class HostedParser:
                 first_page_number=first_page_number,
             )
 
-            for chapter_range in chapter_ranges:
+            for chapter_range in tqdm(chapter_ranges):
+                print(f"Processing PDF pages {chapter_range.pdf_start_page}-{chapter_range.pdf_end_page}...")
+
                 page_data_urls = self._render_pages_to_data_urls(
                     document=document,
                     pdf_start_page=chapter_range.pdf_start_page,
@@ -69,6 +73,7 @@ class HostedParser:
                     pdf_end_page=chapter_range.pdf_end_page,
                     chapter=chapter_range.chapter,
                 )
+                print(response_payload["pages"])
                 pages.extend(
                     self._response_to_parsed_pages(
                         response_payload=response_payload,
@@ -82,12 +87,7 @@ class HostedParser:
 
     @staticmethod
     def _resolve_base_url(base_url: str | None) -> str:
-        resolved_base_url = (base_url or settings.CUSTOM_OCR_MODEL_URL or "").strip().rstrip("/")
-        if not resolved_base_url:
-            return ""
-        if resolved_base_url.endswith("/v1"):
-            return resolved_base_url
-        return f"{resolved_base_url}/v1"
+        return NuExtractClient.resolve_base_url(base_url=base_url)
 
     @staticmethod
     def _build_chapter_ranges(
@@ -143,9 +143,9 @@ class HostedParser:
         return (
             f"Transcribe these textbook page images{chapter_context} into markdown in reading order. "
             f"The images correspond to PDF pages {pdf_start_page} through {pdf_end_page}. "
-            'Return valid JSON with a top-level "pages" array. '
-            'Each item in "pages" must have "page_number" (1-indexed within this image batch) and '
-            '"markdown". Do not add code fences or commentary.'
+            'Return one item in "pages" per image. '
+            '"page_number" must be 1-indexed within this image batch. '
+            "Use markdown for text, preserve figure captions, and represent tables in readable markdown or HTML."
         )
 
     def _render_pages_to_data_urls(
@@ -155,15 +155,10 @@ class HostedParser:
         pdf_start_page: int,
         pdf_end_page: int,
     ) -> list[str]:
-        data_urls: list[str] = []
-
-        for page_index in range(pdf_start_page - 1, pdf_end_page):
-            page = document.load_page(page_index)
-            pixmap = page.get_pixmap(dpi=self.dpi, alpha=False)
-            png_base64 = base64.b64encode(pixmap.tobytes("png")).decode("utf-8")
-            data_urls.append(f"data:image/png;base64,{png_base64}")
-
-        return data_urls
+        return self.nuextract_client.render_document_pages_to_data_urls(
+            document=document,
+            page_numbers=list(range(pdf_start_page, pdf_end_page + 1)),
+        )
 
     def _request_chapter_parse(
         self,
@@ -173,88 +168,28 @@ class HostedParser:
         pdf_end_page: int,
         chapter: Chapter | None,
     ) -> object:
-        if not page_data_urls:
-            raise ValueError("Hosted OCR parser received an empty chapter page range.")
-
-        response = self.client.chat.completions.create(
-            model=self.model_name,
+        return self.nuextract_client.extract_structured(
+            page_data_urls=page_data_urls,
+            template=self.PAGE_MARKDOWN_TEMPLATE,
+            instructions=self._build_prompt(
+                chapter=chapter,
+                pdf_start_page=pdf_start_page,
+                pdf_end_page=pdf_end_page,
+            ),
             temperature=self.temperature,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": self._build_prompt(
-                                chapter=chapter,
-                                pdf_start_page=pdf_start_page,
-                                pdf_end_page=pdf_end_page,
-                            ),
-                        },
-                        *[
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": data_url},
-                            }
-                            for data_url in page_data_urls
-                        ],
-                    ],
-                }
-            ],
         )
-        response_body = self._extract_completion_text(response.choices[0].message.content)
-        if not response_body:
-            raise ValueError("Hosted OCR response did not contain any text.")
-
-        return self._parse_response_payload(response_body=response_body)
 
     @staticmethod
     def _parse_response_payload(response_body: str) -> object:
-        candidates = [response_body.strip()]
-        fenced_candidate = HostedParser._strip_code_fences(response_body=response_body)
-        if fenced_candidate != candidates[0]:
-            candidates.append(fenced_candidate)
-
-        for candidate in candidates:
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
-                continue
-
-        return {"text": response_body}
+        return NuExtractClient.parse_response_payload(response_body=response_body)
 
     @staticmethod
     def _extract_completion_text(message_content: object) -> str:
-        if isinstance(message_content, str):
-            return message_content
-
-        if isinstance(message_content, list):
-            text_parts: list[str] = []
-
-            for item in message_content:
-                if not isinstance(item, dict):
-                    continue
-                if item.get("type") != "text":
-                    continue
-                text = item.get("text")
-                if isinstance(text, str):
-                    text_parts.append(text)
-
-            return "\n".join(text_parts)
-
-        return ""
+        return NuExtractClient.extract_completion_text(message_content=message_content)
 
     @staticmethod
     def _strip_code_fences(response_body: str) -> str:
-        stripped = response_body.strip()
-        if not stripped.startswith("```"):
-            return stripped
-
-        lines = stripped.splitlines()
-        if len(lines) < 3 or lines[-1].strip() != "```":
-            return stripped
-
-        return "\n".join(lines[1:-1]).strip()
+        return NuExtractClient.strip_code_fences(response_body=response_body)
 
     @classmethod
     def _response_to_parsed_pages(
@@ -308,10 +243,7 @@ class HostedParser:
             message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
             content = message.get("content")
             if isinstance(content, str):
-                try:
-                    return cls._extract_response_pages(json.loads(content))
-                except json.JSONDecodeError:
-                    return [content]
+                return cls._extract_response_pages(NuExtractClient.parse_response_payload(content))
 
         for key in ("markdown", "text", "content"):
             value = response_payload.get(key)
@@ -341,5 +273,10 @@ class HostedParser:
         page_number = raw_page.get("page_number")
         if isinstance(page_number, int):
             return page_number
+        if isinstance(page_number, str):
+            try:
+                return int(page_number)
+            except ValueError:
+                return None
 
         return None
