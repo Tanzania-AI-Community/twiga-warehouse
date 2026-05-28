@@ -4,6 +4,7 @@ import mistralai
 
 from src.config.settings import settings
 from src.models.document import ParsedDocument, ParsedPage
+from src.models.toc import TableOfContents
 
 
 class MistralOcrParser:
@@ -15,7 +16,13 @@ class MistralOcrParser:
         self.client = mistralai.Mistral(api_key=resolved_api_key)
         self.model_name = model_name
 
-    def parse(self, pdf_path: Path) -> ParsedDocument:
+    def parse(
+        self,
+        pdf_path: Path,
+        table_of_contents: TableOfContents | None = None,
+        first_page_number: int = 1,
+    ) -> ParsedDocument:
+        del table_of_contents, first_page_number
         normalized_path = Path(pdf_path)
 
         with normalized_path.open(mode="rb") as handle:

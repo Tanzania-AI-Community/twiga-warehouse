@@ -15,7 +15,7 @@ from src.models import (
 from src.pipeline.ocr import ensure_ocr_pdf
 from src.providers.chunker import LangchainChunker, MathematicalChunker
 from src.providers.embedder import get_embedding_client
-from src.providers.parser import MistralOcrParser, PdfTextParser
+from src.providers.parser import HostedParser, MistralOcrParser, PdfTextParser
 from src.providers.toc import extract_table_of_contents
 
 
@@ -32,15 +32,18 @@ def run_pipeline(
         parser_type=request.processing.parser_type,
     )
     resolved_input_path = prepare_input_path(request=request)
-    parser = get_parser(parser_type=resolved_parser_type)
-    parsed_document = parser.parse(pdf_path=resolved_input_path)
-
     table_of_contents = extract_table_of_contents(
         pdf_path=resolved_input_path,
         toc_page_numbers=request.book.pagination.table_of_contents_page_numbers,
         parser_config=TableOfContentsParserConfig(
             parser_type=request.processing.toc_parser_type,
         ),
+    )
+    parser = get_parser(parser_type=resolved_parser_type)
+    parsed_document = parser.parse(
+        pdf_path=resolved_input_path,
+        table_of_contents=table_of_contents,
+        first_page_number=request.book.pagination.first_page_number,
     )
 
     chunker = get_chunker(chunker_type=request.processing.chunker_type)
@@ -121,6 +124,9 @@ def resolve_parser_type(
 def get_parser(
     parser_type: ParserType,
 ):
+    if parser_type == ParserType.HOSTED:
+        return HostedParser()
+
     if parser_type == ParserType.MISTRAL:
         return MistralOcrParser()
 

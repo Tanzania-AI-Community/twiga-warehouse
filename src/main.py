@@ -41,6 +41,7 @@ def main() -> None:
         choices=[
             ParserType.PDF.value,
             ParserType.MISTRAL.value,
+            ParserType.HOSTED.value,
         ],
         help="Optional parser override.",
     )
