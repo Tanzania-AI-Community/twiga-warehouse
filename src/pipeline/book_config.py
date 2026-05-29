@@ -54,6 +54,7 @@ def resolve_book_paths(
         info_path=resolved_input_dir / "info.yaml",
         input_path=resolved_input_dir / input_file_name,
         output_path=outputs_root / output_file_name,
+        checkpoints_path=resolved_input_dir / "checkpoints",
     )
 
 

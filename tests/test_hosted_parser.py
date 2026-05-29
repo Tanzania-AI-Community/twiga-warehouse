@@ -65,6 +65,18 @@ def test_hosted_parser_parses_chapters_with_pdf_page_offsets(monkeypatch, tmp_pa
             {"page_number": 8, "text": "chapter-2-page-4\n"},
         ]
     )
+    markdown_path = pdf_path.with_suffix(".md")
+    assert markdown_path.read_text(encoding="utf-8") == (
+        "chapter-1-page-1\n"
+        "chapter-1-page-2\n"
+        "chapter-1-page-3\n"
+        "\n"
+        "chapter-2-page-1\n"
+        "chapter-2-page-2\n"
+        "chapter-2-page-3\n"
+        "chapter-2-page-4\n"
+        "\n"
+    )
 
 
 def test_hosted_parser_falls_back_to_entire_document_without_toc(monkeypatch, tmp_path: Path) -> None:

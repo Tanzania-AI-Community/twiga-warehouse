@@ -9,7 +9,7 @@ from pydantic import SecretStr
 from together import Together
 
 from src.config.settings import settings
-from src.models.toc import Chapter, TableOfContents, TableOfContentsParserConfig, TableOfContentsParserType
+from src.models.toc import Chapter, SubChapter, TableOfContents, TableOfContentsParserConfig, TableOfContentsParserType
 from src.providers.nuextract import NuExtractClient
 
 
@@ -26,6 +26,7 @@ For each chapter, return:
 - `name`: the chapter title
 - `number`: the chapter number as an integer
 - `start_page`: the textbook page number printed for that chapter entry, not the PDF image index
+- `subchapters`: optionally (if exists), a list of any subchapters appearing under that chapter in the table of contents. Each subchapter should have following fields: name and start_page.
 If the source omits explicit chapter numbers but the ordering is clear, infer sequential numbering.
 """
 TOC_EXTRACTION_TEMPLATE = {
@@ -34,6 +35,12 @@ TOC_EXTRACTION_TEMPLATE = {
             "name": "verbatim-string",
             "number": "integer",
             "start_page": "integer",
+            "subchapters": [
+                {
+                    "name": "verbatim-string",
+                    "start_page": "integer",
+                }
+            ]
         }
     ]
 }
@@ -124,7 +131,7 @@ def validate_hosted_toc_payload(
         name = raw_chapter.get("name")
         number = raw_chapter.get("number")
         start_page = raw_chapter.get("start_page")
-
+        subchapters = raw_chapter.get("subchapters", [])
         if not isinstance(name, str) or not name.strip():
             continue
 
@@ -133,6 +140,13 @@ def validate_hosted_toc_payload(
                 name=name.strip(),
                 number=int(number),
                 start_page=int(start_page),
+                subchapters=[
+                    SubChapter(
+                        name=subchapter.get("name", "").strip(),
+                        start_page=int(subchapter.get("start_page", 0)),
+                    )
+                    for subchapter in subchapters
+                ],
             )
         except (TypeError, ValueError):
             continue

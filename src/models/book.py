@@ -18,6 +18,7 @@ class BookSourcePaths(BaseModel):
     info_path: Path
     input_path: Path
     output_path: Path
+    checkpoints_path: Path
 
 
 class BookPagination(BaseModel):

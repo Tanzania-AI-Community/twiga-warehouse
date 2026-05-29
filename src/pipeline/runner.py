@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from logging import getLogger
 
 from src.models import (
     ChunkerType,
@@ -18,15 +19,66 @@ from src.providers.embedder import get_embedding_client
 from src.providers.parser import HostedParser, MistralOcrParser, PdfTextParser
 from src.providers.toc import extract_table_of_contents
 
+logging = getLogger(__name__)
 
+TABLE_OF_CONTENTS_SAVE_NAME = "table_of_contents.json"
 DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
 DEFAULT_EMBEDDING_PROVIDER = EmbedderProvider.TOGETHER
 DEFAULT_TOC_PARSER_TYPE = TableOfContentsParserType.TOGETHER
 
 
+def _prepare_checkpoints_path(checkpoints_path: Path) -> Path:
+    checkpoints_path.mkdir(parents=True, exist_ok=True)
+    return checkpoints_path
+
+
+def _load_saved_toc(checkpoints_path: Path) -> TableOfContents | None:
+    toc_file = checkpoints_path / TABLE_OF_CONTENTS_SAVE_NAME
+    if not toc_file.is_file():
+        logging.warning(f"No saved table of contents found at {toc_file}. Proceeding with extraction.")
+        return None
+
+    with toc_file.open(mode="r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    return TableOfContents.model_validate(data)
+
+
+def _save_toc(toc: TableOfContents, checkpoints_path: Path) -> None:
+    toc_file = checkpoints_path / TABLE_OF_CONTENTS_SAVE_NAME
+    with toc_file.open(mode="w", encoding="utf-8") as handle:
+        json.dump(
+            obj=toc.model_dump(),
+            fp=handle,
+            ensure_ascii=False,
+            indent=4,
+        )
+
+
+def _load_table_of_contents(
+    request: PipelineRequest,
+    resolved_input_path: Path,
+    resolved_toc_parser_type: TableOfContentsParserType,
+    checkpoints_path: Path,
+) -> TableOfContents:
+    table_of_contents = _load_saved_toc(checkpoints_path=checkpoints_path)
+
+    if not table_of_contents or not table_of_contents.chapters:
+        table_of_contents = extract_table_of_contents(
+            pdf_path=resolved_input_path,
+            toc_page_numbers=request.book.pagination.table_of_contents_page_numbers,
+            parser_config=TableOfContentsParserConfig(
+                parser_type=resolved_toc_parser_type,
+            ),
+        )
+
+    if table_of_contents.chapters and checkpoints_path:
+        _save_toc(toc=table_of_contents, checkpoints_path=checkpoints_path)
+
+
 def run_pipeline(
     request: PipelineRequest,
 ) -> dict[str, object]:
+    checkpoints_path = _prepare_checkpoints_path(checkpoints_path=request.book.source_paths.checkpoints_path)
     resolved_parser_type = resolve_parser_type(
         chunker_type=request.processing.chunker_type,
         parser_type=request.processing.parser_type,
@@ -36,23 +88,22 @@ def run_pipeline(
         parser_type=resolved_parser_type,
         toc_parser_type=request.processing.toc_parser_type,
     )
-    table_of_contents = extract_table_of_contents(
-        pdf_path=resolved_input_path,
-        toc_page_numbers=request.book.pagination.table_of_contents_page_numbers,
-        parser_config=TableOfContentsParserConfig(
-            parser_type=resolved_toc_parser_type,
-        ),
+
+    table_of_contents = _load_table_of_contents(
+        request=request,
+        resolved_input_path=resolved_input_path,
+        resolved_toc_parser_type=resolved_toc_parser_type,
+        checkpoints_path=checkpoints_path,
     )
+
     parser = get_parser(parser_type=resolved_parser_type)
-    print(parser)
+
     parsed_document = parser.parse(
         pdf_path=resolved_input_path,
         table_of_contents=table_of_contents,
         first_page_number=request.book.pagination.first_page_number,
     )
-    print(parsed_document)
 
-    return
     chunker = get_chunker(chunker_type=request.processing.chunker_type)
     text_chunks = chunker.chunk(
         parsed_document=parsed_document,

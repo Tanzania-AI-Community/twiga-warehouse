@@ -29,6 +29,7 @@ def _build_request(pdf_path: Path) -> PipelineRequest:
                 info_path=pdf_path.parent / "info.yaml",
                 input_path=pdf_path,
                 output_path=pdf_path.parent / "output.json",
+                checkpoints_path=pdf_path.parent / "checkpoints",
             ),
             pagination=BookPagination(
                 table_of_contents_page_numbers=1,

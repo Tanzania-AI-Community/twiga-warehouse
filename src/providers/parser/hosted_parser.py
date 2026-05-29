@@ -48,8 +48,9 @@ class HostedParser:
         table_of_contents: TableOfContents | None = None,
         first_page_number: int = 1,
     ) -> ParsedDocument:
-        print("I'm inside")
         normalized_path = Path(pdf_path)
+        markdown_output_path = self._get_markdown_output_path(pdf_path=normalized_path)
+        self._initialize_markdown_output(markdown_output_path=markdown_output_path)
         pages: list[ParsedPage] = []
 
         with fitz.open(normalized_path) as document:
@@ -60,8 +61,6 @@ class HostedParser:
             )
 
             for chapter_range in tqdm(chapter_ranges):
-                print(f"Processing PDF pages {chapter_range.pdf_start_page}-{chapter_range.pdf_end_page}...")
-
                 page_data_urls = self._render_pages_to_data_urls(
                     document=document,
                     pdf_start_page=chapter_range.pdf_start_page,
@@ -73,17 +72,45 @@ class HostedParser:
                     pdf_end_page=chapter_range.pdf_end_page,
                     chapter=chapter_range.chapter,
                 )
-                print(response_payload["pages"])
-                pages.extend(
-                    self._response_to_parsed_pages(
-                        response_payload=response_payload,
-                        pdf_start_page=chapter_range.pdf_start_page,
-                        pdf_end_page=chapter_range.pdf_end_page,
-                    )
+                chapter_pages = self._response_to_parsed_pages(
+                    response_payload=response_payload,
+                    pdf_start_page=chapter_range.pdf_start_page,
+                    pdf_end_page=chapter_range.pdf_end_page,
                 )
+                self._append_chapter_to_markdown(
+                    markdown_output_path=markdown_output_path,
+                    chapter_pages=chapter_pages,
+                )
+                pages.extend(chapter_pages)
 
         pages.sort(key=lambda page: page.page_number)
         return ParsedDocument(pages=pages)
+
+    @staticmethod
+    def _get_markdown_output_path(
+        pdf_path: Path,
+    ) -> Path:
+        return pdf_path.with_suffix(".md")
+
+    @staticmethod
+    def _initialize_markdown_output(
+        markdown_output_path: Path,
+    ) -> None:
+        markdown_output_path.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output_path.write_text("", encoding="utf-8")
+
+    @staticmethod
+    def _append_chapter_to_markdown(
+        markdown_output_path: Path,
+        chapter_pages: list[ParsedPage],
+    ) -> None:
+        if not chapter_pages:
+            return
+
+        with markdown_output_path.open(mode="a", encoding="utf-8") as handle:
+            for page in chapter_pages:
+                handle.write(page.text)
+            handle.write("\n")
 
     @staticmethod
     def _resolve_base_url(base_url: str | None) -> str:

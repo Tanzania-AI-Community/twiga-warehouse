@@ -3,10 +3,16 @@ from enum import Enum
 from pydantic import BaseModel, Field, SecretStr
 
 
+class SubChapter(BaseModel):
+    name: str = Field(description="Subchapter name")
+    start_page: int = Field(description="Subchapter start page number")
+
+
 class Chapter(BaseModel):
     name: str = Field(description="Chapter name")
     number: int = Field(description="Chapter number")
     start_page: int = Field(description="Chapter start page number")
+    subchapters: list[SubChapter] = Field(default_factory=list, description="List of subchapters")
 
 
 class TableOfContents(BaseModel):
