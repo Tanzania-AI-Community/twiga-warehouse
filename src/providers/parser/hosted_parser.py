@@ -1,12 +1,16 @@
+import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import fitz
 from tqdm import tqdm
 
-from src.models.document import ParsedDocument, ParsedPage
+from src.models.document import PageContentType, ParsedDocument, ParsedPage
 from src.models.toc import Chapter, TableOfContents
 from src.providers.nuextract import NuExtractClient
+
+JSON_CHAPTER_SAVE_NAME = "chapter_{chapter_number}.json"
 
 
 @dataclass(frozen=True)
@@ -47,10 +51,9 @@ class HostedParser:
         pdf_path: Path,
         table_of_contents: TableOfContents | None = None,
         first_page_number: int = 1,
+        checkpoints_path: Path | None = None,
     ) -> ParsedDocument:
         normalized_path = Path(pdf_path)
-        markdown_output_path = self._get_markdown_output_path(pdf_path=normalized_path)
-        self._initialize_markdown_output(markdown_output_path=markdown_output_path)
         pages: list[ParsedPage] = []
 
         with fitz.open(normalized_path) as document:
@@ -61,55 +64,66 @@ class HostedParser:
             )
 
             for chapter_range in tqdm(chapter_ranges):
-                page_data_urls = self._render_pages_to_data_urls(
-                    document=document,
-                    pdf_start_page=chapter_range.pdf_start_page,
-                    pdf_end_page=chapter_range.pdf_end_page,
+                json_chapter_path = checkpoints_path / JSON_CHAPTER_SAVE_NAME.format(
+                    chapter_number=chapter_range.chapter.number if chapter_range.chapter else None
                 )
-                response_payload = self._request_chapter_parse(
-                    page_data_urls=page_data_urls,
-                    pdf_start_page=chapter_range.pdf_start_page,
-                    pdf_end_page=chapter_range.pdf_end_page,
-                    chapter=chapter_range.chapter,
-                )
-                chapter_pages = self._response_to_parsed_pages(
-                    response_payload=response_payload,
-                    pdf_start_page=chapter_range.pdf_start_page,
-                    pdf_end_page=chapter_range.pdf_end_page,
-                )
-                self._append_chapter_to_markdown(
-                    markdown_output_path=markdown_output_path,
-                    chapter_pages=chapter_pages,
-                )
+                chapter_pages = self._load_chapter_from_checkpoint(json_chapter_path=json_chapter_path)
+                
+                if not chapter_pages:
+                    page_data_urls = self._render_pages_to_data_urls(
+                        document=document,
+                        pdf_start_page=chapter_range.pdf_start_page,
+                        pdf_end_page=chapter_range.pdf_end_page,
+                    )
+                    response_payload = self._request_chapter_parse(
+                        page_data_urls=page_data_urls,
+                        pdf_start_page=chapter_range.pdf_start_page,
+                        pdf_end_page=chapter_range.pdf_end_page,
+                        chapter=chapter_range.chapter,
+                    )
+                    chapter_pages = self._response_to_parsed_pages(
+                        response_payload=response_payload,
+                    )
+                    self._save_chapter_to_checkpoint(
+                        json_chapter_path=json_chapter_path,
+                        chapter_pages=chapter_pages,
+                        chapter_number=chapter_range.chapter.number if chapter_range.chapter else None,
+                    )
+
                 pages.extend(chapter_pages)
 
         pages.sort(key=lambda page: page.page_number)
         return ParsedDocument(pages=pages)
 
     @staticmethod
-    def _get_markdown_output_path(
-        pdf_path: Path,
-    ) -> Path:
-        return pdf_path.with_suffix(".md")
+    def _load_chapter_from_checkpoint(json_chapter_path: Path) -> list[ParsedPage]:
+        return []
+        if not json_chapter_path.exists():
+            return []
+
+        chapter_pages: list[ParsedPage] = []
+        with json_chapter_path.open(mode="r", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    page_data = json.loads(line)
+                    chapter_pages.append(ParsedPage.model_validate(page_data))
+                except json.JSONDecodeError:
+                    continue
+
+        return chapter_pages
 
     @staticmethod
-    def _initialize_markdown_output(
-        markdown_output_path: Path,
-    ) -> None:
-        markdown_output_path.parent.mkdir(parents=True, exist_ok=True)
-        markdown_output_path.write_text("", encoding="utf-8")
-
-    @staticmethod
-    def _append_chapter_to_markdown(
-        markdown_output_path: Path,
+    def _save_chapter_to_checkpoint(
+        json_chapter_path: Path,
         chapter_pages: list[ParsedPage],
+        chapter_number: int | None = None,
     ) -> None:
-        if not chapter_pages:
+        if not chapter_pages or chapter_number is None:
             return
 
-        with markdown_output_path.open(mode="a", encoding="utf-8") as handle:
+        with json_chapter_path.open(mode="a", encoding="utf-8") as handle:
             for page in chapter_pages:
-                handle.write(page.text)
+                json.dump(page.model_dump(), handle)
             handle.write("\n")
 
     @staticmethod
@@ -148,9 +162,10 @@ class HostedParser:
                 ChapterRange(
                     chapter=chapter,
                     pdf_start_page=pdf_start_page,
-                    pdf_end_page=pdf_end_page,
+                    pdf_end_page=pdf_start_page+1,
                 )
             )
+            break
 
         if chapter_ranges:
             return chapter_ranges
@@ -167,13 +182,30 @@ class HostedParser:
         if chapter is not None:
             chapter_context = f' for chapter "{chapter.name}" (chapter {chapter.number})'
 
-        return (
+        prompt = (
             f"Transcribe these textbook page images{chapter_context} into markdown in reading order. "
             f"The images correspond to PDF pages {pdf_start_page} through {pdf_end_page}. "
-            'Return one item in "pages" per image. '
             '"page_number" must be 1-indexed within this image batch. '
-            "Use markdown for text, preserve figure captions, and represent tables in readable markdown or HTML."
+            "Use markdown for text, preserve figure captions, and represent tables in readable markdown or HTML.\n\n"
+
+            "Return ONLY a valid JSON object. No markdown code fences. No commentary before or after the JSON.\n"
+            "The response must parse successfully with Python json.loads(response_text).\n\n"
+
+            "Use exactly this JSON shape:\n"
+            '{"pages":[{"page_number":1,"markdown":"..."}]}\n\n'
+
+            "Rules:\n"
+            "- Return one item in pages per image.\n"
+            "- Each page object must contain exactly these keys: page_number and markdown.\n"
+            "- Do not duplicate keys.\n"
+            "- The markdown value must be a valid JSON string.\n"
+            "- Represent newlines inside markdown as \\n, not as raw line breaks.\n"
+            "- If markdown contains double quotes, escape them as \\\".\n"
+            "- Prefer single quotes for HTML attributes inside markdown to avoid JSON escaping problems.\n"
+            "- For example, write <figure data-type='image' data-id='1'>, not <figure data-type=\"image\" data-id=\"1\">.\n"
+            "- For image tags, write <img src='1.png' alt='description'/>.\n"
         )
+        return prompt
 
     def _render_pages_to_data_urls(
         self,
@@ -210,47 +242,67 @@ class HostedParser:
     def _parse_response_payload(response_body: str) -> object:
         return NuExtractClient.parse_response_payload(response_body=response_body)
 
-    @staticmethod
-    def _extract_completion_text(message_content: object) -> str:
-        return NuExtractClient.extract_completion_text(message_content=message_content)
-
-    @staticmethod
-    def _strip_code_fences(response_body: str) -> str:
-        return NuExtractClient.strip_code_fences(response_body=response_body)
-
     @classmethod
     def _response_to_parsed_pages(
         cls,
         *,
         response_payload: object,
-        pdf_start_page: int,
-        pdf_end_page: int,
+        # pdf_start_page: int,
+        # pdf_end_page: int,
     ) -> list[ParsedPage]:
-        raw_pages = cls._extract_response_pages(response_payload=response_payload)
-        if not raw_pages:
-            raise ValueError(
-                f"Hosted OCR response did not contain any pages for PDF pages "
-                f"{pdf_start_page}-{pdf_end_page}."
+        if "text" not in response_payload:
+            raise RuntimeError("Expected to have 'text' in payload.")
+
+        loaded_payload: dict[str, Any] = response_payload["text"]
+
+        if "pages" not in loaded_payload:
+            raise RuntimeError("Expected to have 'pages' in text payload.")
+
+        chapter_pages: list[dict, int | str] = json.loads(loaded_payload)["pages"]
+        print(chapter_pages)
+
+        cleaned_chapter_pages: list[ParsedPage] = [
+            ParsedPage(
+                page_number=chapter_page["page_number"],
+                content=chapter_page["markdown"],
+                content_type=PageContentType.MARKDOWN,
             )
+            for chapter_page
+            in chapter_pages
+        ]
+        return cleaned_chapter_pages
 
-        parsed_pages: list[ParsedPage] = []
-        chapter_page_count = pdf_end_page - pdf_start_page + 1
+        # raw_pages = cls._extract_response_pages(response_payload=response_payload)
+        # if not raw_pages:
+        #     raise ValueError(
+        #         f"Hosted OCR response did not contain any pages for PDF pages "
+        #         f"{pdf_start_page}-{pdf_end_page}."
+        #     )
+        
+        # print()
+        # print(raw_pages)
+        # print()
 
-        for default_page_number, raw_page in enumerate(raw_pages, start=1):
-            page_text = cls._extract_page_text(raw_page=raw_page)
-            page_number_in_chapter = cls._extract_page_number(raw_page=raw_page)
+        # parsed_pages: list[ParsedPage] = []
+        # chapter_page_count = pdf_end_page - pdf_start_page + 1
 
-            if page_number_in_chapter is None or not 1 <= page_number_in_chapter <= chapter_page_count:
-                page_number_in_chapter = default_page_number
+        # for default_page_number, raw_page in enumerate(raw_pages, start=1):
+        #     print(raw_page)
+        #     page_text = cls._extract_page_text(raw_page=raw_page)
+        #     page_number_in_chapter = cls._extract_page_number(raw_page=raw_page)
 
-            parsed_pages.append(
-                ParsedPage(
-                    page_number=pdf_start_page + page_number_in_chapter - 1,
-                    text=page_text if page_text.endswith("\n") else f"{page_text}\n",
-                )
-            )
+        #     if page_number_in_chapter is None or not 1 <= page_number_in_chapter <= chapter_page_count:
+        #         page_number_in_chapter = default_page_number
 
-        return parsed_pages
+        #     parsed_pages.append(
+        #         ParsedPage(
+        #             page_number=page_number_in_chapter,
+        #             content=raw_page,
+        #             content_type=PageContentType.MARKDOWN,
+        #         )
+        #     )
+
+        # return parsed_pages
 
     @classmethod
     def _extract_response_pages(cls, response_payload: object) -> list[object]:

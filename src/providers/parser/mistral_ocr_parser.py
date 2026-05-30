@@ -3,7 +3,7 @@ from pathlib import Path
 import mistralai
 
 from src.config.settings import settings
-from src.models.document import ParsedDocument, ParsedPage
+from src.models.document import PageContentType, ParsedDocument, ParsedPage
 from src.models.toc import TableOfContents
 
 
@@ -21,8 +21,9 @@ class MistralOcrParser:
         pdf_path: Path,
         table_of_contents: TableOfContents | None = None,
         first_page_number: int = 1,
+        checkpoints_path: Path | None = None,
     ) -> ParsedDocument:
-        del table_of_contents, first_page_number
+        del table_of_contents, first_page_number, checkpoints_path
         normalized_path = Path(pdf_path)
 
         with normalized_path.open(mode="rb") as handle:
@@ -54,6 +55,7 @@ class MistralOcrParser:
         pages: list[ParsedPage] = []
 
         for page_index, page in enumerate(ocr_response.pages, start=1):
-            pages.append(ParsedPage(page_number=page_index, text=f"{page.markdown}\n"))
+            # TODO: Make it work with Markdown output, not plain text!
+            pages.append(ParsedPage(page_number=page_index, content=f"{page.markdown}\n", content_type=PageContentType.PLAIN_TEXT))
 
         return ParsedDocument(pages=pages)

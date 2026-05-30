@@ -9,7 +9,7 @@ from src.models.book import (
     ProcessingOptions,
 )
 from src.models.chunk import EmbeddedChunk, TextChunk
-from src.models.document import ParsedDocument, ParsedPage
+from src.models.document import PageContentType, ParsedDocument, ParsedPage
 from src.models.metadata import ClassMetadata, ResourceMetadata, SubjectMetadata
 from src.models.processing import ChunkerType, EmbedderProvider, ParserType
 from src.models.toc import Chapter, TableOfContents, TableOfContentsParserType
@@ -56,7 +56,7 @@ def test_run_pipeline_passes_toc_to_hosted_parser(monkeypatch, tmp_path: Path) -
             parser_calls["pdf_path"] = pdf_path
             parser_calls["table_of_contents"] = table_of_contents
             parser_calls["first_page_number"] = first_page_number
-            return ParsedDocument(pages=[ParsedPage(page_number=5, text="chapter text")])
+            return ParsedDocument(pages=[ParsedPage(page_number=5, content="chapter text", content_type=PageContentType.PLAIN_TEXT)])
 
     class _FakeChunker:
         def chunk(self, *, parsed_document: ParsedDocument, table_of_contents: TableOfContents, first_page_number: int, last_page_number: int | None = None):
@@ -101,7 +101,7 @@ def test_run_pipeline_uses_hosted_toc_parser_for_hosted_document_parser(monkeypa
     class _FakeParser:
         def parse(self, *, pdf_path: Path, table_of_contents: TableOfContents | None = None, first_page_number: int = 1):
             del pdf_path, table_of_contents, first_page_number
-            return ParsedDocument(pages=[ParsedPage(page_number=5, text="chapter text")])
+            return ParsedDocument(pages=[ParsedPage(page_number=5, content="chapter text", content_type=PageContentType.PLAIN_TEXT)])
 
     class _FakeChunker:
         def chunk(self, *, parsed_document: ParsedDocument, table_of_contents: TableOfContents, first_page_number: int, last_page_number: int | None = None):

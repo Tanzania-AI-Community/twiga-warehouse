@@ -61,6 +61,8 @@ def _load_table_of_contents(
     checkpoints_path: Path,
 ) -> TableOfContents:
     table_of_contents = _load_saved_toc(checkpoints_path=checkpoints_path)
+    if table_of_contents:
+        return table_of_contents
 
     if not table_of_contents or not table_of_contents.chapters:
         table_of_contents = extract_table_of_contents(
@@ -102,6 +104,7 @@ def run_pipeline(
         pdf_path=resolved_input_path,
         table_of_contents=table_of_contents,
         first_page_number=request.book.pagination.first_page_number,
+        checkpoints_path=checkpoints_path,
     )
 
     chunker = get_chunker(chunker_type=request.processing.chunker_type)
