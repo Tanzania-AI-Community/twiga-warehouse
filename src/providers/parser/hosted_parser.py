@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import os
 
 import fitz
 from tqdm import tqdm
@@ -9,6 +10,7 @@ from tqdm import tqdm
 from src.models.document import PageContentType, ParsedDocument, ParsedPage
 from src.models.toc import Chapter, TableOfContents
 from src.providers.nuextract import NuExtractClient
+from src.providers.llm.together import client as TogetherClient
 
 JSON_CHAPTER_SAVE_NAME = "chapter_{chapter_number}.json"
 
@@ -35,7 +37,7 @@ class HostedParser:
         base_url: str | None = None,
         model_name: str = NuExtractClient.MODEL_NAME,
         dpi: int = 100,
-        temperature: float = 0.2,
+        temperature: float = 0.0,
     ):
         self.nuextract_client = NuExtractClient(
             base_url=base_url,
@@ -62,69 +64,66 @@ class HostedParser:
                 total_pages=document.page_count,
                 first_page_number=first_page_number,
             )
+            print(chapter_ranges)
 
             for chapter_range in tqdm(chapter_ranges):
                 json_chapter_path = checkpoints_path / JSON_CHAPTER_SAVE_NAME.format(
                     chapter_number=chapter_range.chapter.number if chapter_range.chapter else None
                 )
-                chapter_pages = self._load_chapter_from_checkpoint(json_chapter_path=json_chapter_path)
-                
-                if not chapter_pages:
+                parsed_chapter: ParsedDocument | None = self._load_chapter_from_checkpoint(json_chapter_path=json_chapter_path)
+                parsed_chapter = None
+                if not parsed_chapter:
                     page_data_urls = self._render_pages_to_data_urls(
                         document=document,
                         pdf_start_page=chapter_range.pdf_start_page,
                         pdf_end_page=chapter_range.pdf_end_page,
                     )
-                    response_payload = self._request_chapter_parse(
+                    parsed_chapter: ParsedDocument = self._request_chapter_parse(
                         page_data_urls=page_data_urls,
                         pdf_start_page=chapter_range.pdf_start_page,
                         pdf_end_page=chapter_range.pdf_end_page,
                         chapter=chapter_range.chapter,
                     )
-                    chapter_pages = self._response_to_parsed_pages(
-                        response_payload=response_payload,
-                    )
+
                     self._save_chapter_to_checkpoint(
                         json_chapter_path=json_chapter_path,
-                        chapter_pages=chapter_pages,
+                        chapter_document=parsed_chapter,
                         chapter_number=chapter_range.chapter.number if chapter_range.chapter else None,
                     )
 
-                pages.extend(chapter_pages)
+                pages.extend(parsed_chapter.pages)
 
         pages.sort(key=lambda page: page.page_number)
         return ParsedDocument(pages=pages)
 
     @staticmethod
-    def _load_chapter_from_checkpoint(json_chapter_path: Path) -> list[ParsedPage]:
-        return []
+    def _load_chapter_from_checkpoint(json_chapter_path: Path) -> ParsedDocument | None:
         if not json_chapter_path.exists():
-            return []
+            return None
 
-        chapter_pages: list[ParsedPage] = []
-        with json_chapter_path.open(mode="r", encoding="utf-8") as handle:
-            for line in handle:
-                try:
-                    page_data = json.loads(line)
-                    chapter_pages.append(ParsedPage.model_validate(page_data))
-                except json.JSONDecodeError:
-                    continue
+        parsed_document = None
+        try:
+            with json_chapter_path.open(mode="r", encoding="utf-8") as json_file:
+                parsed_document = json.load(json_file)
+        except json.JSONDecodeError:
+            return None
 
-        return chapter_pages
+        return parsed_document
 
     @staticmethod
     def _save_chapter_to_checkpoint(
         json_chapter_path: Path,
-        chapter_pages: list[ParsedPage],
+        chapter_document: ParsedDocument,
         chapter_number: int | None = None,
     ) -> None:
-        if not chapter_pages or chapter_number is None:
+        if not chapter_document or chapter_number is None:
             return
 
-        with json_chapter_path.open(mode="a", encoding="utf-8") as handle:
-            for page in chapter_pages:
-                json.dump(page.model_dump(), handle)
-            handle.write("\n")
+        if json_chapter_path.exists():
+            os.remove(json_chapter_path)
+
+        with json_chapter_path.open(mode="a", encoding="utf-8") as json_file:
+            json.dump(chapter_document.model_dump(), json_file, ensure_ascii=False, indent=4)
 
     @staticmethod
     def _resolve_base_url(base_url: str | None) -> str:
@@ -162,10 +161,9 @@ class HostedParser:
                 ChapterRange(
                     chapter=chapter,
                     pdf_start_page=pdf_start_page,
-                    pdf_end_page=pdf_start_page+1,
+                    pdf_end_page=pdf_end_page,
                 )
             )
-            break
 
         if chapter_ranges:
             return chapter_ranges
@@ -226,8 +224,8 @@ class HostedParser:
         pdf_start_page: int,
         pdf_end_page: int,
         chapter: Chapter | None,
-    ) -> object:
-        return self.nuextract_client.extract_structured(
+    ) -> ParsedDocument:
+        raw_payload = self.nuextract_client.extract_structured(
             page_data_urls=page_data_urls,
             template=self.PAGE_MARKDOWN_TEMPLATE,
             instructions=self._build_prompt(
@@ -238,124 +236,16 @@ class HostedParser:
             temperature=self.temperature,
         )
 
+        print(raw_payload)
+        a = self._clean_payload_with_llm(raw_payload)
+        print(a)
+
+        return a
+
     @staticmethod
     def _parse_response_payload(response_body: str) -> object:
         return NuExtractClient.parse_response_payload(response_body=response_body)
 
-    @classmethod
-    def _response_to_parsed_pages(
-        cls,
-        *,
-        response_payload: object,
-        # pdf_start_page: int,
-        # pdf_end_page: int,
-    ) -> list[ParsedPage]:
-        if "text" not in response_payload:
-            raise RuntimeError("Expected to have 'text' in payload.")
-
-        loaded_payload: dict[str, Any] = response_payload["text"]
-
-        if "pages" not in loaded_payload:
-            raise RuntimeError("Expected to have 'pages' in text payload.")
-
-        chapter_pages: list[dict, int | str] = json.loads(loaded_payload)["pages"]
-        print(chapter_pages)
-
-        cleaned_chapter_pages: list[ParsedPage] = [
-            ParsedPage(
-                page_number=chapter_page["page_number"],
-                content=chapter_page["markdown"],
-                content_type=PageContentType.MARKDOWN,
-            )
-            for chapter_page
-            in chapter_pages
-        ]
-        return cleaned_chapter_pages
-
-        # raw_pages = cls._extract_response_pages(response_payload=response_payload)
-        # if not raw_pages:
-        #     raise ValueError(
-        #         f"Hosted OCR response did not contain any pages for PDF pages "
-        #         f"{pdf_start_page}-{pdf_end_page}."
-        #     )
-        
-        # print()
-        # print(raw_pages)
-        # print()
-
-        # parsed_pages: list[ParsedPage] = []
-        # chapter_page_count = pdf_end_page - pdf_start_page + 1
-
-        # for default_page_number, raw_page in enumerate(raw_pages, start=1):
-        #     print(raw_page)
-        #     page_text = cls._extract_page_text(raw_page=raw_page)
-        #     page_number_in_chapter = cls._extract_page_number(raw_page=raw_page)
-
-        #     if page_number_in_chapter is None or not 1 <= page_number_in_chapter <= chapter_page_count:
-        #         page_number_in_chapter = default_page_number
-
-        #     parsed_pages.append(
-        #         ParsedPage(
-        #             page_number=page_number_in_chapter,
-        #             content=raw_page,
-        #             content_type=PageContentType.MARKDOWN,
-        #         )
-        #     )
-
-        # return parsed_pages
-
-    @classmethod
-    def _extract_response_pages(cls, response_payload: object) -> list[object]:
-        if isinstance(response_payload, list):
-            return response_payload
-
-        if not isinstance(response_payload, dict):
-            return [response_payload]
-
-        for key in ("pages", "data", "page_texts"):
-            value = response_payload.get(key)
-            if isinstance(value, list):
-                return value
-
-        choices = response_payload.get("choices")
-        if isinstance(choices, list) and choices:
-            message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
-            content = message.get("content")
-            if isinstance(content, str):
-                return cls._extract_response_pages(NuExtractClient.parse_response_payload(content))
-
-        for key in ("markdown", "text", "content"):
-            value = response_payload.get(key)
-            if value is not None:
-                return [value]
-
-        return []
-
     @staticmethod
-    def _extract_page_text(raw_page: object) -> str:
-        if isinstance(raw_page, str):
-            return raw_page
-
-        if isinstance(raw_page, dict):
-            for key in ("markdown", "text", "content"):
-                value = raw_page.get(key)
-                if isinstance(value, str):
-                    return value
-
-        return str(raw_page)
-
-    @staticmethod
-    def _extract_page_number(raw_page: object) -> int | None:
-        if not isinstance(raw_page, dict):
-            return None
-
-        page_number = raw_page.get("page_number")
-        if isinstance(page_number, int):
-            return page_number
-        if isinstance(page_number, str):
-            try:
-                return int(page_number)
-            except ValueError:
-                return None
-
-        return None
+    def _clean_payload_with_llm(raw_payload: object) -> ParsedDocument:
+        return TogetherClient.clean_document(document=raw_payload)

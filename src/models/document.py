@@ -13,7 +13,5 @@ class ParsedPage(BaseModel):
     content_type: PageContentType = PageContentType.PLAIN_TEXT
 
 
-
-
 class ParsedDocument(BaseModel):
     pages: list[ParsedPage]
