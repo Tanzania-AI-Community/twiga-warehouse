@@ -41,6 +41,7 @@ def main() -> None:
         choices=[
             ParserType.PDF.value,
             ParserType.MISTRAL.value,
+            ParserType.HOSTED.value,
         ],
         help="Optional parser override.",
     )
@@ -89,6 +90,7 @@ def main() -> None:
             TableOfContentsParserType.GEMINI.value,
             TableOfContentsParserType.TOGETHER.value,
             TableOfContentsParserType.OLLAMA.value,
+            TableOfContentsParserType.HOSTED.value,
             TableOfContentsParserType.NONE.value,
         ],
         help="Parser to use for table of contents extraction.",
