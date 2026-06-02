@@ -1,10 +1,10 @@
+import asyncio
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-import os
 
 import fitz
+from pydantic import ValidationError
 from tqdm import tqdm
 
 from src.models.document import PageContentType, ParsedDocument, ParsedPage
@@ -13,6 +13,7 @@ from src.providers.nuextract import NuExtractClient
 from src.providers.llm.together import client as TogetherClient
 
 JSON_CHAPTER_SAVE_NAME = "chapter_{chapter_number}.json"
+MAX_CONCURRENT_PAGE_TASKS = 5
 
 
 @dataclass(frozen=True)
@@ -22,16 +23,14 @@ class ChapterRange:
     pdf_end_page: int
 
 
-class HostedParser:
-    PAGE_MARKDOWN_TEMPLATE = {
-        "pages": [
-            {
-                "page_number": "integer",
-                "markdown": "string",
-            }
-        ]
-    }
+@dataclass(frozen=True)
+class PageParseRequest:
+    pdf_page_number: int
+    chapter_page_number: int
+    page_data_url: str
 
+
+class HostedParser:
     def __init__(
         self,
         base_url: str | None = None,
@@ -64,65 +63,69 @@ class HostedParser:
                 total_pages=document.page_count,
                 first_page_number=first_page_number,
             )
-            print(chapter_ranges)
-
             for chapter_range in tqdm(chapter_ranges):
-                json_chapter_path = checkpoints_path / JSON_CHAPTER_SAVE_NAME.format(
-                    chapter_number=chapter_range.chapter.number if chapter_range.chapter else None
+                chapter_number = self._get_chapter_number(chapter=chapter_range.chapter)
+                json_chapter_path = self._build_checkpoint_path(
+                    checkpoints_path=checkpoints_path,
+                    chapter_number=chapter_number,
                 )
-                parsed_chapter: ParsedDocument | None = self._load_chapter_from_checkpoint(json_chapter_path=json_chapter_path)
-                parsed_chapter = None
-                if not parsed_chapter:
-                    page_data_urls = self._render_pages_to_data_urls(
+                parsed_chapter = self._load_chapter_from_checkpoint(json_chapter_path=json_chapter_path)
+
+                if parsed_chapter:
+                    pages.extend(parsed_chapter.pages)
+                    continue
+
+                parsed_chapter = asyncio.run(
+                    self._parse_chapter_async(
                         document=document,
-                        pdf_start_page=chapter_range.pdf_start_page,
-                        pdf_end_page=chapter_range.pdf_end_page,
+                        chapter_range=chapter_range,
                     )
-                    parsed_chapter: ParsedDocument = self._request_chapter_parse(
-                        page_data_urls=page_data_urls,
-                        pdf_start_page=chapter_range.pdf_start_page,
-                        pdf_end_page=chapter_range.pdf_end_page,
-                        chapter=chapter_range.chapter,
-                    )
-
-                    self._save_chapter_to_checkpoint(
-                        json_chapter_path=json_chapter_path,
-                        chapter_document=parsed_chapter,
-                        chapter_number=chapter_range.chapter.number if chapter_range.chapter else None,
-                    )
-
+                )
+                self._save_chapter_to_checkpoint(
+                    json_chapter_path=json_chapter_path,
+                    chapter_document=parsed_chapter,
+                    chapter_number=chapter_number,
+                )
                 pages.extend(parsed_chapter.pages)
 
-        pages.sort(key=lambda page: page.page_number)
         return ParsedDocument(pages=pages)
 
     @staticmethod
-    def _load_chapter_from_checkpoint(json_chapter_path: Path) -> ParsedDocument | None:
-        if not json_chapter_path.exists():
+    def _build_checkpoint_path(
+        checkpoints_path: Path | None,
+        chapter_number: int | None,
+    ) -> Path | None:
+        if checkpoints_path is None or chapter_number is None:
             return None
 
-        parsed_document = None
+        return checkpoints_path / JSON_CHAPTER_SAVE_NAME.format(chapter_number=chapter_number)
+
+    @staticmethod
+    def _load_chapter_from_checkpoint(json_chapter_path: Path | None) -> ParsedDocument | None:
+        if json_chapter_path is None or not json_chapter_path.exists():
+            return None
+
         try:
             with json_chapter_path.open(mode="r", encoding="utf-8") as json_file:
                 parsed_document = json.load(json_file)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, OSError):
             return None
 
-        return parsed_document
+        try:
+            return ParsedDocument.model_validate(parsed_document)
+        except ValidationError:
+            return None
 
     @staticmethod
     def _save_chapter_to_checkpoint(
-        json_chapter_path: Path,
+        json_chapter_path: Path | None,
         chapter_document: ParsedDocument,
         chapter_number: int | None = None,
     ) -> None:
-        if not chapter_document or chapter_number is None:
+        if not chapter_document or chapter_number is None or json_chapter_path is None:
             return
 
-        if json_chapter_path.exists():
-            os.remove(json_chapter_path)
-
-        with json_chapter_path.open(mode="a", encoding="utf-8") as json_file:
+        with json_chapter_path.open(mode="w", encoding="utf-8") as json_file:
             json.dump(chapter_document.model_dump(), json_file, ensure_ascii=False, indent=4)
 
     @staticmethod
@@ -171,81 +174,186 @@ class HostedParser:
         return [ChapterRange(chapter=None, pdf_start_page=1, pdf_end_page=total_pages)]
 
     @staticmethod
-    def _build_prompt(
+    def _get_chapter_number(chapter: Chapter | None) -> int | None:
+        if chapter is None:
+            return None
+
+        return chapter.number
+
+    @staticmethod
+    def _build_ocr_prompt(
         chapter: Chapter | None,
-        pdf_start_page: int,
-        pdf_end_page: int,
+        pdf_page_number: int,
+        chapter_page_number: int,
     ) -> str:
         chapter_context = ""
         if chapter is not None:
             chapter_context = f' for chapter "{chapter.name}" (chapter {chapter.number})'
 
         prompt = (
-            f"Transcribe these textbook page images{chapter_context} into markdown in reading order. "
-            f"The images correspond to PDF pages {pdf_start_page} through {pdf_end_page}. "
-            '"page_number" must be 1-indexed within this image batch. '
-            "Use markdown for text, preserve figure captions, and represent tables in readable markdown or HTML.\n\n"
-
-            "Return ONLY a valid JSON object. No markdown code fences. No commentary before or after the JSON.\n"
-            "The response must parse successfully with Python json.loads(response_text).\n\n"
-
-            "Use exactly this JSON shape:\n"
-            '{"pages":[{"page_number":1,"markdown":"..."}]}\n\n'
-
+            f"Transcribe this single textbook page image{chapter_context} into markdown in reading order. "
+            f"The image corresponds to PDF page {pdf_page_number}, which is page {chapter_page_number} within the chapter. "
+            "Return ONLY the markdown text for this page. No JSON. No markdown code fences. No commentary before or after the markdown.\n\n"
             "Rules:\n"
-            "- Return one item in pages per image.\n"
-            "- Each page object must contain exactly these keys: page_number and markdown.\n"
-            "- Do not duplicate keys.\n"
-            "- The markdown value must be a valid JSON string.\n"
-            "- Represent newlines inside markdown as \\n, not as raw line breaks.\n"
-            "- If markdown contains double quotes, escape them as \\\".\n"
-            "- Prefer single quotes for HTML attributes inside markdown to avoid JSON escaping problems.\n"
-            "- For example, write <figure data-type='image' data-id='1'>, not <figure data-type=\"image\" data-id=\"1\">.\n"
+            "- Preserve figure captions.\n"
+            "- Represent tables in readable markdown or HTML.\n"
+            "- Prefer single quotes for HTML attributes.\n"
             "- For image tags, write <img src='1.png' alt='description'/>.\n"
         )
         return prompt
 
-    def _render_pages_to_data_urls(
+    def _render_page_to_data_url(
         self,
         *,
         document: fitz.Document,
-        pdf_start_page: int,
-        pdf_end_page: int,
-    ) -> list[str]:
+        pdf_page_number: int,
+    ) -> str:
         return self.nuextract_client.render_document_pages_to_data_urls(
             document=document,
-            page_numbers=list(range(pdf_start_page, pdf_end_page + 1)),
-        )
+            page_numbers=[pdf_page_number],
+        )[0]
 
-    def _request_chapter_parse(
+    def _request_page_ocr(
         self,
         *,
-        page_data_urls: list[str],
-        pdf_start_page: int,
-        pdf_end_page: int,
+        page_data_url: str,
+        pdf_page_number: int,
+        chapter_page_number: int,
         chapter: Chapter | None,
-    ) -> ParsedDocument:
-        raw_payload = self.nuextract_client.extract_structured(
-            page_data_urls=page_data_urls,
-            template=self.PAGE_MARKDOWN_TEMPLATE,
-            instructions=self._build_prompt(
-                chapter=chapter,
-                pdf_start_page=pdf_start_page,
-                pdf_end_page=pdf_end_page,
-            ),
+    ) -> str:
+        response = self.nuextract_client.client.chat.completions.create(
+            model=self.nuextract_client.model_name,
             temperature=self.temperature,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": self._build_ocr_prompt(
+                                chapter=chapter,
+                                pdf_page_number=pdf_page_number,
+                                chapter_page_number=chapter_page_number,
+                            ),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": page_data_url},
+                        },
+                    ],
+                }
+            ],
+            extra_body={
+                "chat_template_kwargs": {
+                    "enable_thinking": False,
+                }
+            },
+            timeout=600,
+        )
+        response_body = self.nuextract_client.extract_completion_text(response.choices[0].message.content)
+        if not response_body:
+            raise ValueError(f"OCR response was empty for PDF page {pdf_page_number}.")
+
+        markdown = NuExtractClient.strip_code_fences(response_body=response_body).strip()
+        if not markdown:
+            raise ValueError(f"OCR response was blank after cleanup for PDF page {pdf_page_number}.")
+
+        return markdown
+
+    async def _parse_chapter_async(
+        self,
+        *,
+        document: fitz.Document,
+        chapter_range: ChapterRange,
+    ) -> ParsedDocument:
+        page_requests = self._build_page_parse_requests(
+            document=document,
+            chapter_range=chapter_range,
+        )
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_PAGE_TASKS)
+        pages = await asyncio.gather(
+            *[
+                self._parse_page_async(
+                    page_request=page_request,
+                    chapter=chapter_range.chapter,
+                    semaphore=semaphore,
+                )
+                for page_request in page_requests
+            ]
+        )
+        return ParsedDocument(pages=pages)
+
+    def _build_page_parse_requests(
+        self,
+        *,
+        document: fitz.Document,
+        chapter_range: ChapterRange,
+    ) -> list[PageParseRequest]:
+        page_requests: list[PageParseRequest] = []
+
+        for chapter_page_number, pdf_page_number in enumerate(
+            range(chapter_range.pdf_start_page, chapter_range.pdf_end_page + 1),
+            start=1,
+        ):
+            page_requests.append(
+                PageParseRequest(
+                    pdf_page_number=pdf_page_number,
+                    chapter_page_number=chapter_page_number,
+                    page_data_url=self._render_page_to_data_url(
+                        document=document,
+                        pdf_page_number=pdf_page_number,
+                    ),
+                )
+            )
+
+        return page_requests
+
+    async def _parse_page_async(
+        self,
+        *,
+        page_request: PageParseRequest,
+        chapter: Chapter | None,
+        semaphore: asyncio.Semaphore,
+    ) -> ParsedPage:
+        async with semaphore:
+            raw_markdown = await asyncio.to_thread(
+                self._request_page_ocr,
+                page_data_url=page_request.page_data_url,
+                pdf_page_number=page_request.pdf_page_number,
+                chapter_page_number=page_request.chapter_page_number,
+                chapter=chapter,
+            )
+            cleaned_markdown = await asyncio.to_thread(
+                self._clean_page_with_retry,
+                raw_markdown=raw_markdown,
+                chapter=chapter,
+                pdf_page_number=page_request.pdf_page_number,
+            )
+
+        return ParsedPage(
+            page_number=page_request.chapter_page_number,
+            content=cleaned_markdown,
+            content_type=PageContentType.MARKDOWN,
         )
 
-        print(raw_payload)
-        a = self._clean_payload_with_llm(raw_payload)
-        print(a)
-
-        return a
-
     @staticmethod
-    def _parse_response_payload(response_body: str) -> object:
-        return NuExtractClient.parse_response_payload(response_body=response_body)
+    def _clean_page_with_retry(
+        raw_markdown: str,
+        chapter: Chapter | None,
+        pdf_page_number: int,
+    ) -> str:
+        cleaned_markdown = TogetherClient.clean_page(
+            markdown=raw_markdown,
+            chapter=chapter,
+        )
+        if cleaned_markdown is not None:
+            return cleaned_markdown
 
-    @staticmethod
-    def _clean_payload_with_llm(raw_payload: object) -> ParsedDocument:
-        return TogetherClient.clean_document(document=raw_payload)
+        cleaned_markdown = TogetherClient.clean_page(
+            markdown=raw_markdown,
+            chapter=chapter,
+        )
+        if cleaned_markdown is not None:
+            return cleaned_markdown
+
+        raise ValueError(f"LLM cleaner returned null twice for PDF page {pdf_page_number}.")
