@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 from src.models import (
@@ -15,18 +16,27 @@ from src.models import (
 from src.pipeline.ocr import ensure_ocr_pdf
 from src.providers.chunker import LangchainChunker, MathematicalChunker
 from src.providers.embedder import get_embedding_client
+from src.providers.embedder.google_embedder import DOCUMENT_MAX_BYTES
 from src.providers.parser import MistralOcrParser, PdfTextParser
 from src.providers.toc import extract_table_of_contents
 
 
-DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
-DEFAULT_EMBEDDING_PROVIDER = EmbedderProvider.TOGETHER
+logger = logging.getLogger(__name__)
+
+
+DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
+DEFAULT_EMBEDDING_PROVIDER = EmbedderProvider.GOOGLE
 DEFAULT_TOC_PARSER_TYPE = TableOfContentsParserType.TOGETHER
 
 
 def run_pipeline(
     request: PipelineRequest,
 ) -> dict[str, object]:
+    embedding_model = request.processing.embedding_model_name or (
+        DEFAULT_EMBEDDING_MODEL
+        if request.processing.embedding_provider == EmbedderProvider.GOOGLE
+        else "intfloat/multilingual-e5-large-instruct"
+    )
     resolved_parser_type = resolve_parser_type(
         chunker_type=request.processing.chunker_type,
         parser_type=request.processing.parser_type,
@@ -53,7 +63,7 @@ def run_pipeline(
 
     embedded_chunks = create_embedded_chunks(
         embedding_provider=request.processing.embedding_provider,
-        embedding_model_name=request.processing.embedding_model_name or DEFAULT_EMBEDDING_MODEL,
+        embedding_model_name=embedding_model,
         text_chunks=text_chunks,
     )
 
@@ -62,8 +72,7 @@ def run_pipeline(
             "processing": request.processing.model_copy(
                 update={
                     "parser_type": resolved_parser_type,
-                    "embedding_model_name": request.processing.embedding_model_name
-                    or DEFAULT_EMBEDDING_MODEL,
+                    "embedding_model_name": embedding_model,
                 }
             )
         }
@@ -151,15 +160,31 @@ def create_embedded_chunks(
         provider=embedding_provider,
         model_name=embedding_model_name,
     )
-    embeddings = embedder.embed_documents(
-        texts=[chunk.content for chunk in text_chunks],
-    )
+    if embedding_provider == EmbedderProvider.GOOGLE:
+        truncated_indices = [
+            i for i, chunk in enumerate(text_chunks)
+            if len(chunk.content.encode("utf-8")) > DOCUMENT_MAX_BYTES
+        ]
+        if truncated_indices:
+            logger.warning(
+                "Embedding bounded prefixes for chunk indices %s; full text is preserved",
+                truncated_indices,
+            )
+    try:
+        embeddings = embedder.embed_documents(
+            texts=[chunk.content for chunk in text_chunks],
+        )
+    finally:
+        if hasattr(embedder, "close"):
+            embedder.close()
+    if len(embeddings) != len(text_chunks):
+        raise ValueError("Embedding count does not match the produced chunks.")
 
     embedded_chunks: list[EmbeddedChunk] = []
 
     for chunk, embedding in zip(text_chunks, embeddings):
         if not embedding:
-            continue
+            raise ValueError("An embedding failed; refusing to export an incomplete book.")
 
         embedded_chunks.append(
             EmbeddedChunk(
@@ -181,7 +206,17 @@ def build_output_payload(
     table_of_contents: TableOfContents,
     embedded_chunks: list[EmbeddedChunk],
 ) -> dict[str, object]:
+    embedding_metadata = None
+    if request.processing.embedding_provider == EmbedderProvider.GOOGLE:
+        embedding_metadata = {
+            "provider": "google",
+            "model": request.processing.embedding_model_name or DEFAULT_EMBEDDING_MODEL,
+            "dimensions": 1024,
+            "task_type": "RETRIEVAL_DOCUMENT",
+            "document_max_bytes": DOCUMENT_MAX_BYTES,
+        }
     return {
+        "embedding_metadata": embedding_metadata,
         "resource": request.book.metadata.resource.model_dump(),
         "class": request.book.metadata.class_.model_dump(),
         "subject": request.book.metadata.subject.model_dump(),

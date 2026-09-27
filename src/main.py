@@ -11,7 +11,6 @@ from src.models import (
     TableOfContentsParserType,
 )
 from src.pipeline import (
-    DEFAULT_EMBEDDING_MODEL,
     DEFAULT_EMBEDDING_PROVIDER,
     DEFAULT_TOC_PARSER_TYPE,
     build_book_definition,
@@ -66,7 +65,7 @@ def main() -> None:
         "--embedding_model",
         type=str,
         required=False,
-        default=DEFAULT_EMBEDDING_MODEL,
+        default=None,
         help="Embedding model used for chunk embeddings.",
     )
     parser.add_argument(
@@ -75,10 +74,11 @@ def main() -> None:
         required=False,
         default=DEFAULT_EMBEDDING_PROVIDER.value,
         choices=[
+            EmbedderProvider.GOOGLE.value,
             EmbedderProvider.OLLAMA.value,
             EmbedderProvider.TOGETHER.value,
         ],
-        help="Embedding provider to use (ollama or together).",
+        help="Embedding provider to use (google, ollama or together).",
     )
     parser.add_argument(
         "--toc_parser_type",

@@ -1,48 +1,28 @@
-from src.domain.entities.chunker import EmbedderProvider
-from src.infrastructure.embedder.embedding_router import get_embedding_client, get_embeddings
+from unittest.mock import MagicMock
+
+from src.models.processing import EmbedderProvider
+from src.providers.embedder import router
 
 
-class _FakeEmbedderClient:
-    def __init__(self, value: list[list[float]]):
-        self._value = value
+def test_get_embedding_client_selects_together(monkeypatch):
+    factory = MagicMock()
+    monkeypatch.setattr(router, "get_together_embedding_client", factory)
+    result = router.get_embedding_client(EmbedderProvider.TOGETHER, "legacy-model")
+    assert result is factory.return_value
+    assert factory.call_args.kwargs["model_name"] == "legacy-model"
 
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self._value
 
+def test_get_embedding_client_selects_google_without_api_key(monkeypatch):
+    from src.providers.embedder import google_embedder
 
-def test_get_embedding_client_selects_together(monkeypatch) -> None:
-    captured: dict[str, str | None] = {}
-    sentinel = object()
-
-    def _fake_together_client(*, model_name: str | None = None, api_key: str | None = None):
-        captured["model_name"] = model_name
-        captured["api_key"] = api_key
-        return sentinel
-
-    monkeypatch.setattr(
-        "src.infrastructure.embedder.embedding_router.get_together_embedding_client",
-        _fake_together_client,
+    factory = MagicMock()
+    monkeypatch.setattr(google_embedder, "GoogleEmbeddingClient", factory)
+    monkeypatch.setattr(router.settings, "GOOGLE_CLOUD_PROJECT", "test-project")
+    result = router.get_embedding_client(EmbedderProvider.GOOGLE)
+    assert result is factory.return_value
+    factory.assert_called_once_with(
+        project="test-project",
+        location="global",
+        model="gemini-embedding-001",
+        dimensions=1024,
     )
-
-    client = get_embedding_client(
-        provider=EmbedderProvider.TOGETHER,
-        model_name="intfloat/multilingual-e5-large-instruct",
-    )
-
-    assert client is sentinel
-    assert captured["model_name"] == "intfloat/multilingual-e5-large-instruct"
-
-
-def test_get_embeddings_defaults_to_ollama(monkeypatch) -> None:
-    expected = [[0.1, 0.2, 0.3]]
-
-    def _fake_get_embedding_client(*args, **kwargs):
-        return _FakeEmbedderClient(expected)
-
-    monkeypatch.setattr(
-        "src.infrastructure.embedder.embedding_router.get_embedding_client",
-        _fake_get_embedding_client,
-    )
-
-    result = get_embeddings(["hello"])
-    assert result == expected

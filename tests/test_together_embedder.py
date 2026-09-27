@@ -1,6 +1,6 @@
-from src.infrastructure.embedder.together_embedder import (
+from src.providers.embedder.together_embedder import (
     DEFAULT_EMBEDDING_MODEL,
-    TogetherEmbedder,
+    TogetherEmbeddingClient,
     get_embedding_client,
 )
 
@@ -37,13 +37,13 @@ class _FakeTogetherClient:
 
 def test_get_embedding_client_uses_default_model(monkeypatch) -> None:
     monkeypatch.setattr(
-        "src.infrastructure.embedder.together_embedder.Together",
+        "src.providers.embedder.together_embedder.Together",
         _FakeTogetherClient,
     )
 
     client = get_embedding_client(api_key="test-key")
 
-    assert isinstance(client, TogetherEmbedder)
+    assert isinstance(client, TogetherEmbeddingClient)
     fake_client = _FakeTogetherClient.instances[-1]
     assert fake_client.api_key == "test-key"
     assert client.model == DEFAULT_EMBEDDING_MODEL
@@ -51,7 +51,7 @@ def test_get_embedding_client_uses_default_model(monkeypatch) -> None:
 
 def test_get_embedding_client_resolves_model_alias(monkeypatch) -> None:
     monkeypatch.setattr(
-        "src.infrastructure.embedder.together_embedder.Together",
+        "src.providers.embedder.together_embedder.Together",
         _FakeTogetherClient,
     )
 
@@ -62,7 +62,7 @@ def test_get_embedding_client_resolves_model_alias(monkeypatch) -> None:
 
 def test_embed_documents_calls_together_in_batches(monkeypatch) -> None:
     monkeypatch.setattr(
-        "src.infrastructure.embedder.together_embedder.Together",
+        "src.providers.embedder.together_embedder.Together",
         _FakeTogetherClient,
     )
 

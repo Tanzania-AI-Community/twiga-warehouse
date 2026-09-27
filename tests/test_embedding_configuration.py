@@ -1,87 +1,63 @@
-from pathlib import Path
+from unittest.mock import MagicMock
 
-from src.application.pipeline_runner import (
-    DEFAULT_EMBEDDING_MODEL,
-    DEFAULT_EMBEDDING_PROVIDER,
-    build_book_config,
-)
-from src.domain.entities.chunker import ChunkerType, EmbedderProvider
-from src.domain.entities.table_of_contents import TableOfContentsParserType
+import pytest
+
+from src.models import ChunkerType, EmbedderProvider, TextChunk
+from src.models.book import ProcessingOptions
+from src.pipeline import runner
 
 
-def _write_info_yaml(path: Path) -> None:
-    path.write_text(
-        """
-resource:
-  name: "Sample Book"
-  type: "textbook"
-  authors:
-    - "Author One"
+def test_default_embedding_settings_are_google():
+    options = ProcessingOptions(chunker_type=ChunkerType.LANGCHAIN)
+    assert options.embedding_provider == EmbedderProvider.GOOGLE
+    assert runner.DEFAULT_EMBEDDING_PROVIDER == EmbedderProvider.GOOGLE
+    assert runner.DEFAULT_EMBEDDING_MODEL == "gemini-embedding-001"
 
-subject:
-  name: "biology"
 
-class:
-  grade_level: "os4"
-  status: "active"
-  name: "Biology Form 4"
+@pytest.mark.parametrize("vectors", [[], [[1.0]], [[1.0], []]])
+def test_pipeline_rejects_partial_embedding_results(monkeypatch, vectors):
+    client = MagicMock()
+    client.embed_documents.return_value = vectors
+    monkeypatch.setattr(runner, "get_embedding_client", lambda **kwargs: client)
+    chunks = [
+        TextChunk(content=text, page_number=1, chapter_number=1) for text in ["a", "b"]
+    ]
+    with pytest.raises(ValueError):
+        runner.create_embedded_chunks(
+            EmbedderProvider.GOOGLE, "gemini-embedding-001", chunks
+        )
+    client.close.assert_called_once()
 
-book_config:
-  table_of_contents_page_number: "4,5"
-  first_page_number: 10
-  last_page_number: 200
-""".strip(),
-        encoding="utf-8",
+
+def test_pipeline_preserves_chunk_metadata(monkeypatch):
+    client = MagicMock()
+    client.embed_documents.return_value = [[1.0] * 1024, [2.0] * 1024]
+    monkeypatch.setattr(runner, "get_embedding_client", lambda **kwargs: client)
+    chunks = [
+        TextChunk(content=text, page_number=i, chapter_number=2)
+        for i, text in enumerate(["a", "b"], 1)
+    ]
+    result = runner.create_embedded_chunks(
+        EmbedderProvider.GOOGLE, "gemini-embedding-001", chunks
     )
+    assert [c.content for c in result] == ["a", "b"]
+    assert [c.page_number for c in result] == [1, 2]
+    assert all(c.chapter_number == 2 and len(c.embedding) == 1024 for c in result)
 
 
-def test_build_book_config_uses_default_embedding_settings(tmp_path: Path) -> None:
-    info_path = tmp_path / "info.yaml"
-    _write_info_yaml(info_path)
+def test_output_declares_document_embedding_policy():
+    from src.models import TableOfContents
 
-    output = build_book_config(
-        info_path=info_path,
-        input_path=tmp_path / "input.pdf",
-        output_path=tmp_path / "output.json",
+    request = MagicMock()
+    request.processing = ProcessingOptions(
         chunker_type=ChunkerType.LANGCHAIN,
+        embedding_model_name="gemini-embedding-001",
     )
-
-    assert output.chunker_config.embedding_provider == DEFAULT_EMBEDDING_PROVIDER
-    assert output.chunker_config.embedding_model_name == DEFAULT_EMBEDDING_MODEL
-    if DEFAULT_EMBEDDING_PROVIDER == EmbedderProvider.TOGETHER:
-        assert output.table_of_contents_parser.parser_type == TableOfContentsParserType.TOGETHER
-    else:
-        assert output.table_of_contents_parser.parser_type == TableOfContentsParserType.OLLAMA
-
-
-def test_build_book_config_allows_together_embedding_provider(tmp_path: Path) -> None:
-    info_path = tmp_path / "info.yaml"
-    _write_info_yaml(info_path)
-
-    output = build_book_config(
-        info_path=info_path,
-        input_path=tmp_path / "input.pdf",
-        output_path=tmp_path / "output.json",
-        chunker_type=ChunkerType.LANGCHAIN,
-        embedding_provider=EmbedderProvider.TOGETHER,
-        embedding_model_name="intfloat/multilingual-e5-large-instruct",
-    )
-
-    assert output.chunker_config.embedding_provider == EmbedderProvider.TOGETHER
-    assert output.chunker_config.embedding_model_name == "intfloat/multilingual-e5-large-instruct"
-    assert output.table_of_contents_parser.parser_type == TableOfContentsParserType.TOGETHER
-
-
-def test_build_book_config_defaults_toc_parser_to_ollama_for_ollama_provider(tmp_path: Path) -> None:
-    info_path = tmp_path / "info.yaml"
-    _write_info_yaml(info_path)
-
-    output = build_book_config(
-        info_path=info_path,
-        input_path=tmp_path / "input.pdf",
-        output_path=tmp_path / "output.json",
-        chunker_type=ChunkerType.LANGCHAIN,
-        embedding_provider=EmbedderProvider.OLLAMA,
-    )
-
-    assert output.table_of_contents_parser.parser_type == TableOfContentsParserType.OLLAMA
+    payload = runner.build_output_payload(request, TableOfContents(chapters=[]), [])
+    assert payload["embedding_metadata"] == {
+        "provider": "google",
+        "model": "gemini-embedding-001",
+        "dimensions": 1024,
+        "task_type": "RETRIEVAL_DOCUMENT",
+        "document_max_bytes": 2048,
+    }
