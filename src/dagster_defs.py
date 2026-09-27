@@ -14,7 +14,6 @@ from src.models import (
     TableOfContentsParserType,
 )
 from src.pipeline import (
-    DEFAULT_EMBEDDING_MODEL,
     DEFAULT_EMBEDDING_PROVIDER,
     DEFAULT_TOC_PARSER_TYPE,
     build_book_definition,
@@ -31,7 +30,7 @@ class PipelineParams:
     subject_name: str
     form: str
     output_file_name: str
-    embedding_model: str
+    embedding_model: str | None
     embedding_provider: EmbedderProvider
     parser_type: ParserType | None
     toc_parser_type: TableOfContentsParserType
@@ -45,7 +44,7 @@ class PipelineRunConfig(Config):
     subject_name: str
     form: str
     output_file_name: str
-    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    embedding_model: str | None = None
     embedding_provider: EmbedderProvider = DEFAULT_EMBEDDING_PROVIDER
     parser_type: ParserType | None = None
     toc_parser_type: TableOfContentsParserType = DEFAULT_TOC_PARSER_TYPE

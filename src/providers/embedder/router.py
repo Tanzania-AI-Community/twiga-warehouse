@@ -16,6 +16,19 @@ def get_embedding_client(
     model_name: str | None = None,
     base_url: str | None = None,
 ) -> EmbedderClient:
+    if provider == EmbedderProvider.GOOGLE:
+        from src.providers.embedder.google_embedder import (
+            DEFAULT_MODEL,
+            GoogleEmbeddingClient,
+        )
+
+        return GoogleEmbeddingClient(
+            project=settings.GOOGLE_CLOUD_PROJECT,
+            location=settings.GOOGLE_CLOUD_LOCATION,
+            model=model_name or DEFAULT_MODEL,
+            dimensions=settings.EMBEDDING_DIMENSIONS,
+        )
+
     if provider == EmbedderProvider.OLLAMA:
         return get_ollama_embedding_client(
             model_name=model_name,

@@ -36,7 +36,7 @@ class ProcessingOptions(BaseModel):
     chunker_type: ChunkerType
     parser_type: ParserType | None = None
     toc_parser_type: TableOfContentsParserType = TableOfContentsParserType.TOGETHER
-    embedding_provider: EmbedderProvider = EmbedderProvider.TOGETHER
+    embedding_provider: EmbedderProvider = EmbedderProvider.GOOGLE
     embedding_model_name: str | None = None
 
 

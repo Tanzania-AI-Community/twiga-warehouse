@@ -12,5 +12,6 @@ class ChunkerType(str, Enum):
 
 
 class EmbedderProvider(str, Enum):
+    GOOGLE = "google"
     OLLAMA = "ollama"
     TOGETHER = "together"
