@@ -14,6 +14,7 @@ from src.models import (
     TableOfContentsParserType,
 )
 from src.pipeline import (
+    DEFAULT_EMBEDDING_MODEL,
     DEFAULT_EMBEDDING_PROVIDER,
     DEFAULT_TOC_PARSER_TYPE,
     build_book_definition,
@@ -113,7 +114,21 @@ def run_pipeline_op(request: PipelineRequest) -> str:
     return str(output_path)
 
 
-@job
+@job(
+    config={
+        "ops": {
+            "collect_params": {
+                "config": {
+                    "subject_name": "REPLACE_WITH_SUBJECT",
+                    "form": "REPLACE_WITH_FORM",
+                    "output_file_name": "REPLACE_WITH_OUTPUT.json",
+                    "embedding_provider": DEFAULT_EMBEDDING_PROVIDER.name,
+                    "embedding_model": DEFAULT_EMBEDDING_MODEL,
+                }
+            }
+        }
+    }
+)
 def book_pipeline_job():
     params = collect_params()
     paths = resolve_paths(params)

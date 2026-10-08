@@ -18,7 +18,19 @@ def response(values=None, *, truncated=False):
 
 
 @pytest.fixture
-def client(monkeypatch):
+def clock(monkeypatch):
+    clock = SimpleNamespace(now=0.0)
+    def sleep(seconds):
+        clock.now += seconds
+    monkeypatch.setattr(
+        google_embedder, "time",
+        SimpleNamespace(monotonic=lambda: clock.now, sleep=sleep),
+    )
+    return clock
+
+
+@pytest.fixture
+def client(monkeypatch, clock):
     sdk = MagicMock()
     sdk.models.embed_content.return_value = response()
     constructor = MagicMock(return_value=sdk)
@@ -34,7 +46,7 @@ def test_vertex_adc_configuration_and_task_types(client):
     assert kwargs["project"] == "test-project"
     assert kwargs["location"] == "global"
     assert "api_key" not in kwargs
-    assert kwargs["http_options"].retry_options.attempts == 5
+    assert kwargs["http_options"].retry_options.attempts == 1
     assert adapter.embed_query("question") == [0.25] * 1024
     config = sdk.models.embed_content.call_args.kwargs["config"]
     assert config.task_type == "RETRIEVAL_QUERY"
@@ -115,3 +127,41 @@ def test_document_prefix_preserves_utf8_and_never_truncates_queries(client):
     assert original.endswith("rest of document")
     adapter.embed_query(original)
     assert sdk.models.embed_content.call_args.kwargs["contents"] == [original]
+
+
+def test_paces_concurrent_batches_and_followup_query(client, clock):
+    adapter, sdk, _ = client
+    adapter.max_workers = 4
+    starts = []
+    def embed(**kwargs):
+        starts.append(clock.now)
+        return SimpleNamespace(embeddings=[response().embeddings[0] for _ in kwargs["contents"]])
+    sdk.models.embed_content.side_effect = embed
+    assert len(adapter.embed_documents(["document"] * 48)) == 48
+    adapter.embed_query("question")
+    assert starts == [0, 13, 26, 39, 52, 65, 78]
+    assert all(sum(start <= t < start + 60 for t in starts) <= 5 for start in starts)
+
+
+def test_quota_retry_waits_and_preserves_next_request_pacing(client, clock):
+    adapter, sdk, _ = client
+    starts = []
+    def embed(**kwargs):
+        starts.append(clock.now)
+        if len(starts) == 1:
+            raise google_embedder.errors.ClientError(429, {"error": {"message": "quota"}})
+        return response()
+    sdk.models.embed_content.side_effect = embed
+    adapter.embed_query("first")
+    adapter.embed_query("second")
+    assert starts == [0, 60, 73]
+
+
+@pytest.mark.parametrize("code, attempts", [(400, 1), (429, 5), (503, 5)])
+def test_api_errors_have_bounded_retries(client, code, attempts):
+    adapter, sdk, _ = client
+    error = google_embedder.errors.APIError(code, {"error": {"message": "failed"}})
+    sdk.models.embed_content.side_effect = error
+    with pytest.raises(google_embedder.errors.APIError):
+        adapter.embed_query("question")
+    assert sdk.models.embed_content.call_count == attempts
